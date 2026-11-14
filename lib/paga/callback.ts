@@ -2,6 +2,76 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { LosslessNumber, parse } from 'lossless-json'
 import type { PaymentAttempt } from '@/lib/types'
 
+export const MAX_CALLBACK_BODY_BYTES = 32 * 1024
+
+const callbackAuditFields = new Set([
+  'notificationId',
+  'statusCode',
+  'event',
+  'totalPaymentAmount',
+  'outstandingBalance',
+  'referenceNumber',
+  'paymentMethod',
+  'callbackReferenceNumber',
+  'paidAt',
+  'transactionDate',
+  'timestamp',
+  'state',
+  'status',
+])
+
+export async function readCallbackRequestBody(
+  body: ReadableStream<Uint8Array> | null,
+  contentLength?: string | null,
+): Promise<string | null> {
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_CALLBACK_BODY_BYTES) {
+    return null
+  }
+  if (!body) return ''
+
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      totalBytes += value.byteLength
+      if (totalBytes > MAX_CALLBACK_BODY_BYTES) {
+        await reader.cancel()
+        return null
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const bytes = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+}
+
+export function redactCallbackAuditBody(rawBody: string) {
+  try {
+    const body: unknown = JSON.parse(rawBody)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return '[callback body redacted]'
+    }
+    const safeBody: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(body)) {
+      if (callbackAuditFields.has(key)) safeBody[key] = value
+    }
+    return JSON.stringify(safeBody)
+  } catch {
+    return '[unparseable callback body redacted]'
+  }
+}
+
 export type PagaCallback = {
   notificationId: string
   statusCode: string

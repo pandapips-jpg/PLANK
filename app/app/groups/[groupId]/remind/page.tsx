@@ -7,18 +7,21 @@ import { useAppInfo } from '@/components/app-shell'
 import { createClient } from '@/lib/supabase/client'
 import { groupLabels } from '@/lib/labels'
 import { getMemberStatus, type MemberStatus } from '@/lib/status'
-import { money } from '@/lib/format'
+import { money, scheduleDate } from '@/lib/format'
 import { normalizeNgPhone } from '@/lib/phone'
-import type { Charge, DueRule, Member } from '@/lib/types'
+import type { Charge, DueRule, Member, PaymentFrequency } from '@/lib/types'
 
 type Language = 'English' | 'Pidgin'
 type OwingMember = Omit<Member, 'status'> & { membershipStatus: Member['status']; status: MemberStatus }
 
-function reminderMessage(member: OwingMember, paymentLabel: string, link: string, language: Language, dueRule: DueRule) {
+function reminderMessage(member: OwingMember, paymentLabel: string, link: string, language: Language, dueRule: DueRule, frequency: PaymentFrequency) {
   const dateValue = member.status.nextDue ? new Date(`${member.status.nextDue.slice(0, 10)}T00:00:00`) : null
-  if (dateValue && member.status.state === 'overdue' && dueRule === 'month_end') dateValue.setDate(dateValue.getDate() + 1)
+  const weekly = frequency === 'weekly' || frequency === 'biweekly'
+  if (dateValue && member.status.state === 'overdue' && (dueRule === 'month_end' || weekly)) dateValue.setDate(dateValue.getDate() + 1)
   const date = dateValue
-    ? dateValue.toLocaleDateString('en-NG', { day: 'numeric', month: 'long' })
+    ? weekly
+      ? scheduleDate(`${dateValue.getFullYear()}-${String(dateValue.getMonth() + 1).padStart(2, '0')}-${String(dateValue.getDate()).padStart(2, '0')}`, frequency)
+      : dateValue.toLocaleDateString('en-NG', { day: 'numeric', month: 'long' })
     : ''
   const late = member.status.state === 'overdue'
   const amountText = money(member.status.remaining)
@@ -30,7 +33,7 @@ function reminderMessage(member: OwingMember, paymentLabel: string, link: string
     return `Good afternoon ${member.name}, small reminder o. ${body} Check your payment details here: ${link}. Thank you!`
   }
   const body = late
-    ? dueRule === 'month_end'
+    ? dueRule === 'month_end' || weekly
       ? `Your ${amountText} ${paymentLabel} is overdue since ${date}. Please pay when you can.`
       : `Your ${amountText} ${paymentLabel} due on ${date} is overdue. Please pay when you can.`
     : `Your ${amountText} ${paymentLabel} is due ${dueRule === 'month_end' ? 'by' : 'on'} ${date}. Please plan for it.`
@@ -107,7 +110,7 @@ export default function RemindPage() {
   }, [group.id, group.frequency])
 
   function getMessage(member: OwingMember) {
-    return reminderMessage(member, labels.payment, `${origin}/pay/${member.pay_token}`, language, group.due_rule)
+    return reminderMessage(member, labels.payment, `${origin}/pay/${member.pay_token}`, language, group.due_rule, group.frequency)
   }
 
   async function copyMessage(member: OwingMember) {
@@ -135,7 +138,7 @@ export default function RemindPage() {
 
   return <>
     <PageHeader group={group} eyebrow={group.name} title="Reminders" description="Send a friendly reminder to people who have a bill due." />
-    {loading ? <div className="empty">Loading payment details...</div> : error ? <div className="empty" role="alert">{error}</div> : members.length === 0
+    {loading ? <div className="list-skeleton" aria-label="Loading payment details"><span /><span /><span /></div> : error ? <div className="empty" role="alert">{error}</div> : members.length === 0
       ? <div className="content-card"><div className="empty">Everyone is up to date. Nice one.</div></div>
       : <div className="remind-grid">
         <div className="content-card">

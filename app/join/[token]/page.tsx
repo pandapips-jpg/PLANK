@@ -3,12 +3,27 @@ import { redirect } from 'next/navigation'
 import { GroupMark } from '@/components/group-mark'
 import { JoinForm } from '@/components/join-form'
 import { Logo } from '@/components/plank-ui'
-import { friendlyDate, money } from '@/lib/format'
+import { friendlyDate, money, scheduleDate } from '@/lib/format'
+import { firstContributionDate, frequencyLabel } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import type { JoinInfo } from '@/lib/types'
 
+function InactiveJoinPage() {
+  return <div className="member-page join-page">
+    <header><Logo /></header>
+    <main><div className="member-greeting"><p className="eyebrow">Join your group</p><h1>This link is not active.</h1><p>Ask your group admin for a new one.</p></div></main>
+  </div>
+}
+
 function nextContributionDeadline(info: JoinInfo) {
   const now = new Date()
+  if (info.frequency === 'weekly' || info.frequency === 'biweekly') {
+    return scheduleDate(firstContributionDate({
+      ...info,
+      first_due_date: info.first_due_date ?? null,
+      due_day: info.due_day ?? 5,
+    }, now), info.frequency)
+  }
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   if (info.first_due_date) {
     const start = new Date(`${info.first_due_date.slice(0, 10)}T00:00:00`)
@@ -22,6 +37,8 @@ function nextContributionDeadline(info: JoinInfo) {
 
 export default async function JoinPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(token)) return <InactiveJoinPage />
+
   const cookieStore = await cookies()
   const savedPayToken = cookieStore.get(`plank_m_${token}`)?.value
   if (savedPayToken && /^[0-9a-f-]{36}$/i.test(savedPayToken)) redirect(`/pay/${savedPayToken}`)
@@ -31,16 +48,11 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
   if (error) throw error
   const info = Array.isArray(response) ? response[0] ?? null : response
 
-  if (!info) return <div className="member-page join-page">
-    <header><Logo /></header>
-    <main><div className="member-greeting"><p className="eyebrow">Join your group</p><h1>This link is not active.</h1><p>Ask your group admin for a new one.</p></div></main>
-  </div>
+  if (!info) return <InactiveJoinPage />
 
   const groupName = typeof info.name === 'string' ? info.name : ''
   const logoUrl = typeof info.logo_url === 'string' ? info.logo_url : null
-  const frequency = info.frequency === 'monthly' ? 'every month'
-    : info.frequency === 'quarterly' ? 'every 3 months'
-      : info.frequency === 'yearly' ? 'every year' : 'one time'
+  const frequency = frequencyLabel(info.frequency)
   return <div className="member-page join-page">
     <header><Logo /></header>
     <main>

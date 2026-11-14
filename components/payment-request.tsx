@@ -42,12 +42,13 @@ function countdown(expiresAt: string, now: number) {
     : `${minutes}m ${String(remainingSeconds).padStart(2, '0')}s`
 }
 
-export function PaymentRequest({ payToken, dueAmount }: { payToken: string; dueAmount: number }) {
+export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payToken: string; dueAmount: number; payEarly?: boolean }) {
   const router = useRouter()
   const [attempt, setAttempt] = useState<AttemptDetails | null>(null)
   const [status, setStatus] = useState<AttemptStatus | null>(null)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
+  const [errorCode, setErrorCode] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const refreshed = useRef(false)
 
@@ -69,16 +70,21 @@ export function PaymentRequest({ payToken, dueAmount }: { payToken: string; dueA
         if (!active) return
         if (!result.ok) {
           setError(result.error)
+          setErrorCode('')
           return
         }
         setError('')
+        setErrorCode('')
         setStatus(result.status)
         if (result.status === 'paid' && !refreshed.current) {
           refreshed.current = true
           router.refresh()
         }
       } catch {
-        if (active) setError('We could not check the payment status. We will keep trying.')
+        if (active) {
+          setError('We could not check the payment status. We will keep trying.')
+          setErrorCode('')
+        }
       } finally {
         checking = false
       }
@@ -94,11 +100,13 @@ export function PaymentRequest({ payToken, dueAmount }: { payToken: string; dueA
   async function createRequest() {
     setStarting(true)
     setError('')
+    setErrorCode('')
     try {
-      const result = await startPayment(payToken)
-      if (!result.ok) {
+      const result = await startPayment(payToken, payEarly)
+      if ('error' in result) {
         setError(result.error)
-        if (result.nothingDue) router.refresh()
+        setErrorCode(result.code)
+        if (result.code === 'compute_amount' && result.error === 'There is nothing due right now.') router.refresh()
         return
       }
       setAttempt(result.attempt)
@@ -106,6 +114,7 @@ export function PaymentRequest({ payToken, dueAmount }: { payToken: string; dueA
       refreshed.current = false
     } catch {
       setError('We could not create your payment request. Please try again.')
+      setErrorCode('')
     } finally {
       setStarting(false)
     }
@@ -124,6 +133,7 @@ export function PaymentRequest({ payToken, dueAmount }: { payToken: string; dueA
         {starting ? 'Creating request…' : 'Create a new payment request'}
       </button>
       {error && <p role="alert">{error}</p>}
+      {errorCode && <small className="payment-error-code">{errorCode}</small>}
     </div>
   }
   if (status === 'failed') {
@@ -133,18 +143,20 @@ export function PaymentRequest({ payToken, dueAmount }: { payToken: string; dueA
         {starting ? 'Creating request…' : 'Create a new payment request'}
       </button>
       {error && <p role="alert">{error}</p>}
+      {errorCode && <small className="payment-error-code">{errorCode}</small>}
     </div>
   }
   if (!attempt) {
     return <div className="payment-request-card payment-request-start">
       <div>
-        <small>Pay by bank transfer</small>
-        <p>A temporary account will be created for the exact amount due.</p>
+        <small>{payEarly ? 'Pay early by bank transfer' : 'Pay by bank transfer'}</small>
+        <p>A temporary account will be created for the exact amount.</p>
       </div>
-      <button className="button primary" type="button" disabled={starting} onClick={createRequest}>
-        {starting ? 'Creating request…' : `Pay ${money(dueAmount)} (amount due)`}
+      <button className={`button ${payEarly ? 'secondary' : 'primary'}`} type="button" disabled={starting} onClick={createRequest}>
+        {starting ? 'Creating request…' : payEarly ? 'Pay early' : `Pay ${money(dueAmount)}`}
       </button>
       {error && <p role="alert">{error}</p>}
+      {errorCode && <small className="payment-error-code">{errorCode}</small>}
     </div>
   }
 
@@ -155,17 +167,19 @@ export function PaymentRequest({ payToken, dueAmount }: { payToken: string; dueA
       <small>Temporary bank transfer</small>
       <b>Send exactly {money(attempt.totalAmount)} to this account</b>
     </div>
-    <div className="payment-account-line">
+    <div className="payment-account-line payment-account-number">
       <div><small>Account number</small><strong>{attempt.accountNumber}</strong></div>
       <CopyValueButton value={attempt.accountNumber} label="account number" />
     </div>
     <p className="payment-bank-hint"><b>Bank:</b> {attempt.bankName}. Choose Paga in your bank app’s bank list.</p>
-    <div className="payment-account-line">
-      <div><small>Exact amount to send</small><strong>{money(attempt.totalAmount)}</strong></div>
-      <CopyValueButton value={amountText} label="exact amount" />
+    <div className="payment-request-details">
+      <div className="payment-detail-row">
+        <div><small>Exact amount to send</small><strong>{money(attempt.totalAmount)}</strong></div>
+        <CopyValueButton value={amountText} label="exact amount" />
+      </div>
+      <p className="payment-fee-line">{money(attempt.amount)} dues + {money(fee)} payment fee</p>
+      <div className="payment-detail-row payment-expiry-row"><span>Expires in</span><strong>{countdown(attempt.expiresAt, now)}</strong></div>
     </div>
-    <p className="payment-fee-line">{money(attempt.amount)} dues + {money(fee)} payment fee</p>
-    <p className="payment-expiry">Expires in {countdown(attempt.expiresAt, now)}</p>
     <p className="payment-waiting" role="status">Waiting for payment…</p>
     {error && <p className="payment-poll-error" role="alert">{error}</p>}
   </div>

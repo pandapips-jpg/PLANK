@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { getPagaHashKey } from '@/lib/env'
-import { processPagaCallback, isProcessedCallbackOutcome, type PagaCallbackStore } from '@/lib/paga/callback'
+import {
+  isProcessedCallbackOutcome,
+  processPagaCallback,
+  readCallbackRequestBody,
+  redactCallbackAuditBody,
+  type PagaCallbackStore,
+} from '@/lib/paga/callback'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
@@ -9,7 +15,7 @@ export const runtime = 'nodejs'
 function headersForAudit(request: Request) {
   const headers: Record<string, string> = {}
   request.headers.forEach((value, name) => {
-    if (name !== 'cookie' && name !== 'set-cookie' && name !== 'authorization') {
+    if (name === 'content-type' || name === 'user-agent') {
       headers[name] = value
     }
   })
@@ -25,7 +31,7 @@ function createStore(): PagaCallbackStore {
         event_id: `pending-${randomUUID()}`,
         event_type: 'unparsed',
         headers,
-        raw_body: rawBody,
+        raw_body: redactCallbackAuditBody(rawBody),
       }).select('id').single()
       if (error || !data) throw new Error('Could not save callback event.')
       return data.id
@@ -97,7 +103,9 @@ function createStore(): PagaCallbackStore {
 export async function POST(request: Request) {
   let rawBody: string
   try {
-    rawBody = await request.text()
+    const body = await readCallbackRequestBody(request.body, request.headers.get('content-length'))
+    if (body === null) return NextResponse.json({ status: 'ERROR' }, { status: 413 })
+    rawBody = body
   } catch {
     return NextResponse.json({ status: 'ERROR' }, { status: 400 })
   }

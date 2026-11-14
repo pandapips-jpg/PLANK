@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { ArrowRight, Plus } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { GroupMark } from '@/components/group-mark'
 import { createClient } from '@/lib/supabase/server'
@@ -33,19 +33,24 @@ export default async function GroupsPage() {
     const statuses = memberIds.map((id) => getMemberStatus(byMember.get(id) ?? [], new Date(), group.frequency, group.due_rule))
     return {
       group: group as Group,
+      members: memberIds.length,
       paid: statuses.filter((status) => status.state === 'paid').length,
       overdue: statuses.filter((status) => status.state === 'overdue').length,
     }
   }))
 
   return <div className="groups-page">
-    <div className="page-header"><div><p className="eyebrow">Your Plank</p><h1>Your groups</h1><p className="description">Choose a group to continue.</p></div></div>
+    <div className="page-header groups-page-header"><div><p className="eyebrow">Your Plank</p><h1>Your groups</h1><p className="description">Choose a group to continue.</p></div><Link className="button primary groups-new-button" href="/app/new"><Plus size={17} />New group</Link></div>
     <div className="groups-grid">
-      {summaries.map(({ group, paid, overdue }) => <Link className="group-card" href={`/app/groups/${group.id}`} key={group.id}>
-        <GroupMark group={group} />
-        <div><h2>{group.name}</h2><p>{group.type}</p><small>{paid} paid, {overdue} overdue</small></div>
+      {summaries.map(({ group, members, overdue }) => <Link className="group-card" href={`/app/groups/${group.id}`} key={group.id}>
+        <div className="group-card-head"><GroupMark group={group} /><div className="group-card-title"><h2 title={group.name}>{group.name}</h2><span className="group-type-pill">{group.type}</span></div></div>
+        <div className="group-card-stats">
+          <div><small>Members</small><b>{members}</b></div>
+          <div><small>Collected this month</small><b aria-label="Not available">—</b></div>
+          <div><small>Overdue</small><b>{overdue}</b></div>
+        </div>
+        <span className="group-card-open">Open <ArrowRight size={15} aria-hidden="true" /></span>
       </Link>)}
-      <Link className="group-card create-group-card" href="/app/new"><span className="group-mark create-group-mark"><Plus size={21} /></span><div><h2>Create a new group</h2><p>Set up another group</p></div></Link>
     </div>
   </div>
 }

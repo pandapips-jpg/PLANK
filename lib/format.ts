@@ -1,3 +1,5 @@
+import type { PaymentFrequency } from './types'
+
 export function money(value: number): string {
   return `₦${value.toLocaleString('en-NG')}`
 }
@@ -12,4 +14,13 @@ export function friendlyDate(value: string): string {
     month: 'short',
     year: 'numeric',
   })
+}
+
+export function scheduleDate(value: string, frequency: PaymentFrequency): string {
+  if (frequency !== 'weekly' && frequency !== 'biweekly') return friendlyDate(value)
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`)
+  const weekday = date.toLocaleDateString('en-NG', { weekday: 'short' })
+  const day = date.toLocaleDateString('en-NG', { day: 'numeric' })
+  const month = date.toLocaleDateString('en-NG', { month: 'short' })
+  return `${weekday} ${day} ${month}`
 }

@@ -1,4 +1,4 @@
-import { money } from './format'
+import { money, scheduleDate } from './format'
 import type { Charge, DueRule, PaymentFrequency } from './types'
 
 export type MemberStatus = {
@@ -12,21 +12,26 @@ function dateOnly(value: string) {
   return value.slice(0, 10)
 }
 
-function formatDueDate(value: string) {
-  return new Date(`${dateOnly(value)}T00:00:00`).toLocaleDateString('en-NG', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+function formatDueDate(value: string, frequency: PaymentFrequency) {
+  return frequency === 'weekly' || frequency === 'biweekly'
+    ? scheduleDate(value, frequency)
+    : new Date(`${dateOnly(value)}T00:00:00`).toLocaleDateString('en-NG', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
 }
 
 function formatMonthEndDate(value: string) {
   return new Date(`${dateOnly(value)}T00:00:00`).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })
 }
 
-function formatDayAfter(value: string) {
+function formatDayAfter(value: string, frequency: PaymentFrequency) {
   const date = new Date(`${dateOnly(value)}T00:00:00`)
   date.setDate(date.getDate() + 1)
+  if (frequency === 'weekly' || frequency === 'biweekly') {
+    return scheduleDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`, frequency)
+  }
   return date.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })
 }
 
@@ -56,10 +61,13 @@ export function getMemberStatus(charges: Charge[], today: Date | string, frequen
 
   if (overdue) {
     const daysOverdue = daysBetween(todayDate, dateOnly(overdue.due_date))
+    const weekly = frequency === 'weekly' || frequency === 'biweekly'
     return {
       state: 'overdue',
-      label: dueRule === 'month_end'
-        ? `Overdue since ${formatDayAfter(overdue.due_date)} · Overdue by ${daysOverdue} ${daysOverdue === 1 ? 'day' : 'days'}`
+      label: weekly
+        ? `Overdue since ${formatDayAfter(overdue.due_date, frequency)}`
+        : dueRule === 'month_end'
+          ? `Overdue since ${formatDayAfter(overdue.due_date, frequency)} · Overdue by ${daysOverdue} ${daysOverdue === 1 ? 'day' : 'days'}`
         : `Overdue by ${daysOverdue} ${daysOverdue === 1 ? 'day' : 'days'}`,
       nextDue: overdue.due_date,
       remaining: overdueCharges.reduce((sum, charge) => sum + charge.amount - charge.paid_amount, 0),
@@ -70,7 +78,9 @@ export function getMemberStatus(charges: Charge[], today: Date | string, frequen
   if (oldestOpen?.paid_amount > 0) {
     return {
       state: 'part_paid',
-      label: dueRule === 'month_end'
+      label: frequency === 'weekly' || frequency === 'biweekly'
+        ? `Part paid · Due ${formatDueDate(oldestOpen.due_date, frequency)}`
+        : dueRule === 'month_end'
         ? `Part paid · Due by ${formatMonthEndDate(oldestOpen.due_date)}`
         : `Part paid ${money(oldestOpen.paid_amount)} of ${money(oldestOpen.amount)}`,
       nextDue: oldestOpen.due_date,
@@ -78,21 +88,24 @@ export function getMemberStatus(charges: Charge[], today: Date | string, frequen
     }
   }
 
-  const soonDays = frequency === 'yearly' ? 30 : 14
+  const weekly = frequency === 'weekly' || frequency === 'biweekly'
+  const soonDays = weekly ? 3 : frequency === 'yearly' ? 30 : 14
   const dueSoon = open.find((charge) => {
     const daysUntil = daysBetween(dateOnly(charge.due_date), todayDate)
     const sameMonth = dateOnly(charge.due_date).slice(0, 7) === todayDate.slice(0, 7)
-    return daysUntil >= 0 && (daysUntil <= soonDays || (dueRule === 'month_end' && sameMonth))
+    return daysUntil >= 0 && (daysUntil <= soonDays || (!weekly && dueRule === 'month_end' && sameMonth))
   })
   if (dueSoon) {
     const dueSoonCharges = open.filter((charge) => {
       const daysUntil = daysBetween(dateOnly(charge.due_date), todayDate)
       const sameMonth = dateOnly(charge.due_date).slice(0, 7) === todayDate.slice(0, 7)
-      return daysUntil >= 0 && (daysUntil <= soonDays || (dueRule === 'month_end' && sameMonth))
+      return daysUntil >= 0 && (daysUntil <= soonDays || (!weekly && dueRule === 'month_end' && sameMonth))
     })
     return {
       state: 'due_soon',
-      label: dueRule === 'month_end' ? `Due by ${formatMonthEndDate(dueSoon.due_date)}` : `Due ${formatDueDate(dueSoon.due_date)}`,
+      label: weekly
+        ? `Due ${formatDueDate(dueSoon.due_date, frequency)}`
+        : dueRule === 'month_end' ? `Due by ${formatMonthEndDate(dueSoon.due_date)}` : `Due ${formatDueDate(dueSoon.due_date, frequency)}`,
       nextDue: dueSoon.due_date,
       remaining: dueSoonCharges.reduce((sum, charge) => sum + charge.amount - charge.paid_amount, 0),
     }
@@ -101,7 +114,7 @@ export function getMemberStatus(charges: Charge[], today: Date | string, frequen
   const nextCharge = open.find((charge) => dateOnly(charge.due_date) >= todayDate)
   return {
     state: 'paid',
-    label: nextCharge ? `Paid. Next due ${formatDueDate(nextCharge.due_date)}` : 'Paid',
+    label: nextCharge ? `Paid. Next due ${formatDueDate(nextCharge.due_date, frequency)}` : 'Paid',
     nextDue: nextCharge?.due_date ?? null,
     remaining: 0,
   }

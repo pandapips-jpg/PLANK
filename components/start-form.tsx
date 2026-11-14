@@ -9,16 +9,13 @@ import { signUpWithEmailPassword } from '@/lib/auth'
 import { Logo } from '@/components/plank-ui'
 import { GroupLogoInput } from '@/components/group-logo-input'
 import { JoinLinkActions } from '@/components/join-link-actions'
+import { contributionMonthChoices, contributionPeriodChoices } from '@/lib/schedule'
 import type { DueRule, GroupType, GroupVisibility, PaymentFrequency } from '@/lib/types'
-
-function nextMonthValue() {
-  const now = new Date()
-  return `${now.getFullYear() + (now.getMonth() === 11 ? 1 : 0)}-${String((now.getMonth() + 1) % 12 + 1).padStart(2, '0')}`
-}
 
 export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initialStep: number; hasGroups: boolean; isAuthenticated: boolean }) {
   const router = useRouter()
   const supabase = createClient()
+  const initialStartChoices = contributionMonthChoices()
   const [step, setStep] = useState(initialStep)
   const [signedIn, setSignedIn] = useState(isAuthenticated)
   const [fullName, setFullName] = useState('')
@@ -31,7 +28,8 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
   const [frequency, setFrequency] = useState<PaymentFrequency>('monthly')
   const [dueRule, setDueRule] = useState<DueRule>('month_end')
   const [dueDay, setDueDay] = useState('1')
-  const [startMonth, setStartMonth] = useState(nextMonthValue)
+  const [dueWeekday, setDueWeekday] = useState('5')
+  const [startMonth, setStartMonth] = useState(() => initialStartChoices[1].value)
   const [visibility, setVisibility] = useState<GroupVisibility>('members')
   const [amount, setAmount] = useState('')
   const [group, setGroup] = useState<{ id: string; slug: string; name: string; logo_url: string | null; join_token: string } | null>(null)
@@ -41,15 +39,23 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
   const [errorCode, setErrorCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false)
+  const weekly = frequency === 'weekly' || frequency === 'biweekly'
+  const startChoices = contributionPeriodChoices({
+    frequency,
+    due_rule: dueRule,
+    due_day: Number(dueDay),
+    first_due_date: null,
+    due_weekday: Number(dueWeekday),
+  })
   const hasUnsavedGroup = !group && Boolean(
     groupName.trim()
     || amount.trim()
     || logoFile
     || groupType !== 'Estate'
     || frequency !== 'monthly'
-    || dueRule !== 'month_end'
+    || (weekly ? dueWeekday !== '5' : dueRule !== 'month_end')
     || dueDay !== '1'
-    || startMonth !== nextMonthValue()
+    || startMonth !== startChoices[1].value
     || visibility !== 'members',
   )
 
@@ -76,6 +82,32 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
       event.preventDefault()
       setShowLeaveConfirmation(true)
     }
+  }
+
+  function changeFrequency(nextFrequency: PaymentFrequency) {
+    const nextWeekly = nextFrequency === 'weekly' || nextFrequency === 'biweekly'
+    const nextDueRule = nextWeekly ? 'fixed' : 'month_end'
+    const choices = contributionPeriodChoices({
+      frequency: nextFrequency,
+      due_rule: nextDueRule,
+      due_day: Number(dueDay),
+      first_due_date: null,
+      due_weekday: Number(dueWeekday),
+    })
+    setFrequency(nextFrequency)
+    setDueRule(nextDueRule)
+    setStartMonth(choices[1].value)
+  }
+
+  function changeDueWeekday(value: string) {
+    setDueWeekday(value)
+    setStartMonth(contributionPeriodChoices({
+      frequency,
+      due_rule: 'fixed',
+      due_day: Number(dueDay),
+      first_due_date: null,
+      due_weekday: Number(value),
+    })[1].value)
   }
 
   function goBack() {
@@ -127,13 +159,6 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
         fullName.trim(),
         phone.trim(),
       )
-      const alreadyExists = signUpError?.message.toLowerCase().includes('already registered')
-        || signUpError?.message.toLowerCase().includes('already exists')
-        || data.user?.identities?.length === 0
-      if (alreadyExists) {
-        setError('This email already has an account.')
-        return
-      }
       if (signUpError || !data.user || !data.session) {
         setError('We could not create your account. Please try again.')
         return
@@ -196,10 +221,10 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
       type: groupType,
       amount: value,
       frequency,
-      due_rule: dueRule,
-      due_day: dueRule === 'fixed' ? fixedDueDay : 5,
+      due_rule: weekly ? 'fixed' : dueRule,
+      due_day: weekly ? 5 : dueRule === 'fixed' ? fixedDueDay : 5,
       due_mode: 'shared' as const,
-      first_due_date: `${startMonth}-01`,
+      first_due_date: weekly ? startMonth : `${startMonth}-01`,
       visibility,
       join_open: true,
       join_needs_approval: false,
@@ -276,7 +301,7 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
           <label>Email address<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
           <label>Password<div className="password-field"><input type={showPassword ? 'text' : 'password'} required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((current) => !current)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></label>
         </div>
-        {error && <p className="form-error" role="alert">{error} {error === 'This email already has an account.' && <Link href="/login">Log in instead.</Link>}</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
         <button className="button primary wide continue" disabled={loading}>{loading ? 'Creating account...' : <>Continue <ArrowRight size={17} /></>}</button>
       </form>}
       {step === 2 && <form onSubmit={createGroup}>
@@ -285,10 +310,14 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
         <div className="form-stack">
           <label>Group name<input required value={groupName} onChange={(event) => setGroupName(event.target.value)} /></label>
           <label>How much?<input inputMode="numeric" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
-          <label>How often?<select value={frequency} onChange={(event) => setFrequency(event.target.value as PaymentFrequency)}><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="one_time">One time</option></select></label>
-          <label>Deadline<select value={dueRule} onChange={(event) => setDueRule(event.target.value as DueRule)}><option value="month_end">End of every month</option><option value="fixed">A fixed day</option></select></label>
-          {dueRule === 'fixed' && <label>Day of the month<input type="number" min="1" max="28" required value={dueDay} onChange={(event) => setDueDay(event.target.value)} /></label>}
-          <label>When does it start?<input type="month" required value={startMonth} onChange={(event) => setStartMonth(event.target.value)} /></label>
+          <label>How often?<select value={frequency} onChange={(event) => changeFrequency(event.target.value as PaymentFrequency)}><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="one_time">One time</option></select></label>
+          {weekly
+            ? <label>Which day is it due?<select value={dueWeekday} onChange={(event) => changeDueWeekday(event.target.value)}><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></label>
+            : <>
+              <label>Deadline<select value={dueRule} onChange={(event) => setDueRule(event.target.value as DueRule)}><option value="month_end">End of every month</option><option value="fixed">A fixed day</option></select></label>
+              {dueRule === 'fixed' && <label>Day of the month<input type="number" min="1" max="28" required value={dueDay} onChange={(event) => setDueDay(event.target.value)} /></label>}
+            </>}
+          <label>Starts<select value={startMonth} onChange={(event) => setStartMonth(event.target.value)}>{startChoices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></label>
           <details className="more-options">
             <summary>More options</summary>
             <div className="form-stack">

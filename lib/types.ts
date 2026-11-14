@@ -1,5 +1,5 @@
 export type GroupType = 'Estate' | 'Church' | 'Union' | 'Age grade' | 'Rent (property)' | 'Other'
-export type PaymentFrequency = 'monthly' | 'quarterly' | 'yearly' | 'one_time'
+export type PaymentFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly' | 'one_time'
 export type DueMode = 'shared' | 'per_member'
 export type DueRule = 'month_end' | 'fixed'
 export type GroupVisibility = 'owner' | 'members' | 'public'
@@ -132,6 +132,7 @@ export type MemberPageData = {
   due_rule?: DueRule
   due_day?: number | null
   first_due_date?: string | null
+  group_first_due_date?: string | null
   ledger_available?: boolean
   payments: Array<{
     amount: number

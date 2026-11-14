@@ -11,6 +11,7 @@ import { money } from '@/lib/format'
 import { groupLabels } from '@/lib/labels'
 import { getMemberStatus } from '@/lib/status'
 import { CopyLedgerLink, PaymentLinks } from '@/components/payment-links'
+import { NotificationsBell } from '@/components/notifications-bell'
 import type { Charge, Member, Payment, Payout } from '@/lib/types'
 
 function monthRange(date: Date, offset = 0) {
@@ -136,17 +137,22 @@ export default function OverviewPage() {
 
   return <>
     <PageHeader group={group} eyebrow={group.name} title={`${greeting}, ${name}`} description={`Here is how your group is doing this month.`} />
-    {loading ? <div className="empty">Loading your group details...</div> : error ? <div className="empty" role="alert">{error}</div> : <>
-      <StatsCarousel stats={stats} />
-      {(joinActivity.recent > 0 || joinActivity.pending > 0) && <div className="join-activity"><Link href={`/app/groups/${group.id}/members`}>{joinActivity.recent > 0 && <span>{joinActivity.recent} new {joinActivity.recent === 1 ? 'member joined' : 'members joined'}</span>}{joinActivity.pending > 0 && <span>{joinActivity.pending} waiting for approval</span>}</Link></div>}
-      <div className="progress-card"><div><b>{new Date().toLocaleDateString('en-NG', { month: 'long' })} collections</b><span>{paidCount} of {members.length} {labels.people} paid up</span></div><div className="progress"><span style={{ width: `${progress}%` }} /></div><strong>{progress}%</strong></div>
-      <div className="share-link-card"><div><span className="eyebrow">Send payment links</span><b>Share a payment page with each person</b><small>Each person gets their own payment details.</small></div><div className="quick-actions"><button className="button secondary" type="button" onClick={() => setShowPaymentLinks((value) => !value)}>{showPaymentLinks ? 'Hide payment links' : 'Send payment links'} <ArrowRight size={16} /></button><Link className="button secondary" href={`/app/groups/${group.id}/ledger`}>See ledger <ArrowRight size={16} /></Link>{group.visibility === 'public' && <CopyLedgerLink slug={group.slug} />}</div></div>
-      {showPaymentLinks && <div className="content-card"><h2>Payment links</h2><PaymentLinks members={members} groupName={group.name} /></div>}
-      <div className="content-card"><div className="card-head"><div><h2>{labels.people[0]?.toUpperCase()}{labels.people.slice(1)}</h2><p>Everyone in {group.name}</p></div><Link href={`/app/groups/${group.id}/members`} className="text-button">View all <ArrowRight size={15} /></Link></div>
-        <div className="pills">{(['All', 'Paid', 'Due soon', 'Overdue'] as const).map((value) => <button key={value} className={filter === value ? 'selected' : ''} onClick={() => setFilter(value)}>{value}<span>{filterCounts[value]}</span></button>)}</div>
-        <MemberRows members={members} amount={group.amount} filter={filter} unit={labels.unit} />
+    {loading ? <div className="list-skeleton" aria-label="Loading your group details"><span /><span /><span /></div> : error ? <div className="empty" role="alert">{error}</div> : <div className="overview-layout">
+      <div className="overview-main-column">
+        <StatsCarousel stats={stats} />
+        {(joinActivity.recent > 0 || joinActivity.pending > 0) && <div className="join-activity"><Link href={`/app/groups/${group.id}/members`}>{joinActivity.recent > 0 && <span>{joinActivity.recent} new {joinActivity.recent === 1 ? 'member joined' : 'members joined'}</span>}{joinActivity.pending > 0 && <span>{joinActivity.pending} waiting for approval</span>}</Link></div>}
+        <div className="progress-card"><div><b>{new Date().toLocaleDateString('en-NG', { month: 'long' })} collections</b><span>{paidCount} of {members.length} {labels.people} paid up</span></div><div className="progress"><span style={{ width: `${progress}%` }} /></div><strong>{progress}%</strong></div>
+        <div className="content-card"><div className="card-head"><div><h2>{labels.people[0]?.toUpperCase()}{labels.people.slice(1)}</h2><p>Everyone in {group.name}</p></div><Link href={`/app/groups/${group.id}/members`} className="text-button">View all <ArrowRight size={15} /></Link></div>
+          <div className="pills">{(['All', 'Paid', 'Due soon', 'Overdue'] as const).map((value) => <button key={value} className={filter === value ? 'selected' : ''} onClick={() => setFilter(value)}>{value}<span>{filterCounts[value]}</span></button>)}</div>
+          <MemberRows members={members} amount={group.amount} filter={filter} />
+        </div>
       </div>
-      <div className="quick-actions"><Link href={`/app/groups/${group.id}/remind`} className="button secondary"><Bell size={17} />Remind people who owe</Link><Link href={`/app/groups/${group.id}/payout`} className="button secondary"><Wallet size={17} />Record money out</Link></div>
-    </>}
+      <aside className="overview-side-column">
+        <div className="content-card overview-notifications"><div><h2>Notifications</h2><p>Updates about your group</p></div><NotificationsBell groupId={group.id} /></div>
+        <div className="share-link-card"><div><span className="eyebrow">Send payment links</span><b>Share a payment page with each person</b><small>Each person gets their own payment details.</small></div><div className="quick-actions"><button className="button secondary" type="button" onClick={() => setShowPaymentLinks((value) => !value)}>{showPaymentLinks ? 'Hide payment links' : 'Send payment links'} <ArrowRight size={16} /></button><Link className="button secondary" href={`/app/groups/${group.id}/ledger`}>See ledger <ArrowRight size={16} /></Link>{group.visibility === 'public' && <CopyLedgerLink slug={group.slug} />}</div></div>
+        {showPaymentLinks && <div className="content-card"><h2>Payment links</h2><PaymentLinks members={members} groupName={group.name} /></div>}
+        <div className="quick-actions overview-quick-actions"><Link href={`/app/groups/${group.id}/remind`} className="button secondary"><Bell size={17} />Remind people who owe</Link><Link href={`/app/groups/${group.id}/payout`} className="button secondary"><Wallet size={17} />Record money out</Link></div>
+      </aside>
+    </div>}
   </>
 }

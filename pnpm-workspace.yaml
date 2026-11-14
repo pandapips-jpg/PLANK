@@ -3,3 +3,7 @@ pmOnFail: ignore
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+
+overrides:
+  baseline-browser-mapping: ^2.11.34
+  body-parser: ^2.4.0

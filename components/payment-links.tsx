@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, MessageCircle } from 'lucide-react'
+import Link from 'next/link'
+import { Copy, ExternalLink, MessageCircle } from 'lucide-react'
 import type { Member } from '@/lib/types'
 import { normalizeNgPhone } from '@/lib/phone'
 
-export function PaymentLinkActions({ member, groupName }: { member: Pick<Member, 'id' | 'name' | 'phone' | 'phone_normalized' | 'pay_token'>; groupName: string }) {
+export function PaymentLinkActions({ member, groupName, showPreview = false }: { member: Pick<Member, 'id' | 'name' | 'phone' | 'phone_normalized' | 'pay_token'>; groupName: string; showPreview?: boolean }) {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
   const phone = member.phone_normalized ?? normalizeNgPhone(member.phone)
@@ -30,6 +31,7 @@ export function PaymentLinkActions({ member, groupName }: { member: Pick<Member,
   return <div className="payment-link-actions">
     <button className="copy-button" type="button" onClick={copyLink}><Copy size={15} />{copied ? 'Link copied' : 'Copy payment link'}</button>
     <button className="button secondary" type="button" disabled={!phone} onClick={sendOnWhatsApp}><MessageCircle size={15} />Send on WhatsApp</button>
+    {showPreview && <Link className="button secondary preview-payment-link" href={`/pay/${member.pay_token}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={15} />Preview payment page</Link>}
     {error && <small role="alert">{error}</small>}
   </div>
 }

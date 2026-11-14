@@ -13,7 +13,10 @@ export type ServerEnv = {
 
 function required(name: string) {
   const value = process.env[name]?.trim()
-  if (!value) throw new Error(`Missing required environment variable: ${name}`)
+  if (!value) {
+    console.error(`Missing ${name}`)
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
   return value
 }
 
@@ -24,8 +27,8 @@ export function getPagaHashKey() {
 export function getPagaEnv(): Pick<ServerEnv, 'pagaPublicKey' | 'pagaSecretKey' | 'pagaHashKey' | 'pagaBaseUrl' | 'pagaRequestExpiryMinutes' | 'publicAppUrl'> {
   const expiryValue = process.env.PAGA_REQUEST_EXPIRY_MINUTES?.trim()
   const expiryMinutes = expiryValue ? Number(expiryValue) : 360
-  if (!Number.isInteger(expiryMinutes) || expiryMinutes <= 0) {
-    throw new Error('PAGA_REQUEST_EXPIRY_MINUTES must be a positive whole number.')
+  if (!Number.isInteger(expiryMinutes) || expiryMinutes <= 0 || expiryMinutes > 7 * 24 * 60) {
+    throw new Error('PAGA_REQUEST_EXPIRY_MINUTES must be a whole number between 1 and 10080.')
   }
   const publicAppUrl = required('NEXT_PUBLIC_APP_URL')
   try {

@@ -7,6 +7,7 @@ export { paymentRequestHash, paymentStatusHash } from '@/lib/paga/collect-hashes
 type PagaResponse = Record<string, unknown> & {
   statusCode?: string | number
   statusMessage?: string
+  httpStatus?: number
 }
 
 export type PaymentRequestInput = {
@@ -22,13 +23,14 @@ export type PaymentRequestResult =
       ok: true
       statusCode: string
       statusMessage: string
+      httpStatus: number
       accountNumber: string
       bankName: string
       totalAmount: number
       expiresAt: string
       hashVariant: 'plain' | 'fixed-2'
     }
-  | { ok: false; statusCode: string; statusMessage: string }
+  | { ok: false; statusCode: string; statusMessage: string; httpStatus: number }
 
 function responseObject(value: unknown): PagaResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -47,23 +49,16 @@ function numberValue(value: unknown) {
 async function post(path: string, body: Record<string, unknown>, hash: string): Promise<PagaResponse> {
   const env = getPagaEnv()
   const authorization = Buffer.from(`${env.pagaPublicKey}:${env.pagaSecretKey}`).toString('base64')
-  let response: Response
-  try {
-    response = await fetch(`${env.pagaBaseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${authorization}`,
-        'Content-Type': 'application/json',
-        Hash: hash,
-      },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-    })
-  } catch {
-    const result = { statusCode: 'NETWORK_ERROR', statusMessage: 'Paga could not be reached.' }
-    console.info('Paga API response', result)
-    return result
-  }
+  const response = await fetch(`${env.pagaBaseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${authorization}`,
+      'Content-Type': 'application/json',
+      Hash: hash,
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  })
 
   let result: PagaResponse
   try {
@@ -75,8 +70,7 @@ async function post(path: string, body: Record<string, unknown>, hash: string): 
     statusCode: text(result.statusCode) || String(response.status),
     statusMessage: text(result.statusMessage),
   }
-  console.info('Paga API response', status)
-  return { ...result, ...status }
+  return { ...result, ...status, httpStatus: response.status }
 }
 
 function isInvalidHash(response: PagaResponse) {
@@ -135,7 +129,8 @@ export async function createPaymentRequest(input: PaymentRequestInput): Promise<
 
   const statusCode = text(response.statusCode)
   const statusMessage = text(response.statusMessage)
-  if (statusCode !== '0') return { ok: false, statusCode, statusMessage }
+  const httpStatus = Number(response.httpStatus ?? 0)
+  if (statusCode !== '0') return { ok: false, statusCode, statusMessage, httpStatus }
 
   const accountNumber = text(response.accountNumber)
   const totalAmount = numberValue(response.totalPaymentAmount) ?? amount
@@ -144,6 +139,7 @@ export async function createPaymentRequest(input: PaymentRequestInput): Promise<
       ok: false,
       statusCode: 'INVALID_RESPONSE',
       statusMessage: 'Paga did not return valid bank transfer details.',
+      httpStatus,
     }
   }
   const returnedExpiry = text(response.expiryDateTimeUTC)
@@ -152,6 +148,7 @@ export async function createPaymentRequest(input: PaymentRequestInput): Promise<
     ok: true,
     statusCode,
     statusMessage,
+    httpStatus,
     accountNumber,
     bankName: text(response.bankName) || 'Paga',
     totalAmount,

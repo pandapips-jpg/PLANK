@@ -80,7 +80,7 @@ export default function ProfilePage() {
         <button type="button" className="button secondary wide" onClick={logOut}><LogOut size={17} />Log out</button>
       </form>
       <div className="content-card"><div className="card-head"><div><span className="eyebrow">Your groups</span><h2>Groups you manage</h2></div><Link href="/app/new" className="text-button">Create a new group <ArrowRight size={15} /></Link></div>
-        {loading ? <div className="empty">Loading your groups...</div> : groups.length === 0 ? <div className="empty">You have no groups yet.</div> : groups.map((group) => {
+        {loading ? <div className="list-skeleton" aria-label="Loading your groups"><span /><span /><span /></div> : groups.length === 0 ? <div className="empty">You have no groups yet.</div> : groups.map((group) => {
           const labels = groupLabels(group.type)
           return <Link className="profile-group" href={`/app/groups/${group.id}`} key={group.id}>
             <GroupMark group={group} /><div><b>{group.name}</b><small>{group.type} · {group.amount.toLocaleString('en-NG')} per {labels.people.slice(0, -1)}</small></div><ArrowRight size={16} />

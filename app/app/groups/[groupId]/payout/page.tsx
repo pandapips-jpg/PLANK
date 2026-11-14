@@ -72,7 +72,7 @@ export default function PayoutPage() {
         {saved && <div className="success"><Check size={17} />Payment recorded and added to the ledger.</div>}
       </form>
       <div className="content-card"><div className="card-head"><div><h2>Past payments</h2><p>Recent money out</p></div></div>
-        {loading ? <div className="empty">Loading past payments...</div> : loadError ? <div className="empty" role="alert">{loadError}</div> : payouts.length === 0 ? <div className="empty">No payments recorded yet.</div> : payouts.map((payout) => <div className="payment" key={payout.id}><span className="payment-icon"><Wallet size={17} /></span><div><b>{payout.payee}</b><span>{payout.note} · {friendlyDate(payout.created_at)}</span></div><strong>-{money(payout.amount)}</strong></div>)}
+        {loading ? <div className="list-skeleton" aria-label="Loading past payments"><span /><span /><span /></div> : loadError ? <div className="empty" role="alert">{loadError}</div> : payouts.length === 0 ? <div className="empty"><b>No payments recorded yet</b><span>Money out will appear here after you record a payment.</span></div> : payouts.map((payout) => <div className="payment" key={payout.id}><span className="payment-icon"><Wallet size={17} /></span><div><b>{payout.payee}</b><span>{payout.note} · {friendlyDate(payout.created_at)}</span></div><strong>-{money(payout.amount)}</strong></div>)}
       </div>
     </div>
   </>

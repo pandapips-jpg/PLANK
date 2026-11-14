@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_CALLBACK_BODY_BYTES,
   processPagaCallback,
+  readCallbackRequestBody,
+  redactCallbackAuditBody,
   verifyPagaCallbackHash,
   type CallbackPayment,
   type PagaCallback,
@@ -133,6 +136,43 @@ function memoryStore(): PagaCallbackStore & {
 }
 
 describe('Paga callback verification and processing', () => {
+  it('reads a callback body within the byte limit', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"event":"PAYMENT_COMPLETE"}'))
+        controller.close()
+      },
+    })
+    await expect(readCallbackRequestBody(body, '1')).resolves.toBe('{"event":"PAYMENT_COMPLETE"}')
+  })
+
+  it('limits streamed callback bodies before assembling them', async () => {
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('x'.repeat(MAX_CALLBACK_BODY_BYTES / 2)))
+        controller.enqueue(encoder.encode('x'.repeat(MAX_CALLBACK_BODY_BYTES / 2 + 1)))
+        controller.close()
+      },
+    })
+    await expect(readCallbackRequestBody(body, '1')).resolves.toBeNull()
+  })
+
+  it('keeps sensitive callback values out of the audit body', () => {
+    const result = redactCallbackAuditBody(JSON.stringify({
+      notificationId: 'notification-1',
+      statusCode: '0',
+      payerName: 'Ada Member',
+      phoneNumber: '08012345678',
+      hash: 'full-secret-hash',
+      referenceNumber: 'PLK-reference',
+    }))
+    expect(result).toContain('notificationId')
+    expect(result).not.toContain('Ada Member')
+    expect(result).not.toContain('08012345678')
+    expect(result).not.toContain('full-secret-hash')
+  })
+
   it('verifies raw, plain-number, and fixed-two-decimal balance variants', () => {
     const value = callback()
     expect(verifyPagaCallbackHash(value, callbackHash(value), hashKey)).toEqual({ ok: true, variant: 'raw' })

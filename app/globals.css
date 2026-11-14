@@ -61,6 +61,7 @@ button { cursor: pointer; }
 .badge.no_charges { color:var(--muted); background:#edf2ee; }
 .due-card.is-pending { background:#edf2ee; color:var(--ink); }
 .due-card.is-pending .due-label,.due-card.is-pending p { color:var(--muted); }
+.phone-missing-hint { color:var(--muted) !important; font-size:10px; line-height:1.4; }
 @media (max-width:760px) { .member-header-actions { align-items:stretch; flex-direction:column; }.member-header-actions .button { font-size:11px; }.member-row-actions { width:100%; }.member-row-actions .payment-link-actions { flex-direction:row; }.member-list.detailed .member-row { flex-wrap:wrap; }.member-list.detailed .member-name { min-width:calc(100% - 50px); } }
 .payment-link-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .payment-link-actions .copy-button,.payment-link-actions .button { white-space:nowrap; }
@@ -183,6 +184,7 @@ button { cursor: pointer; }
 .payment-expiry { margin-top:12px; }
 .payment-waiting { margin:0; color:var(--green-dark); font-weight:700; }
 .payment-poll-error { margin-top:10px; color:var(--red); }
+.payment-error-code { display:block; margin-top:-8px; color:var(--muted); font-size:10px; }
 .payment-request-state { display:flex; flex-direction:column; align-items:flex-start; gap:12px; }
 .payment-request-state b { font-size:13px; }
 @media (max-width:760px) {

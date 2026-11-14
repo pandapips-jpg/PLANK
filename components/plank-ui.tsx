@@ -73,6 +73,6 @@ export function StatsCarousel({ stats }: { stats: Stats }) {
     <button className="carousel-arrow left" aria-label="Previous card" onClick={() => move(-1)}><ArrowLeft size={18} /></button>
     <div className={`stat-carousel-card ${cards[index].tone}`}><span>{cards[index].label}</span><strong>{cards[index].value}</strong>{cards[index].note && <small>{cards[index].note}</small>}</div>
     <button className="carousel-arrow right" aria-label="Next card" onClick={() => move(1)}><ArrowRight size={18} /></button>
-    <div className="carousel-dots">{cards.map((card, dot) => <button key={card.label} aria-label={`Show ${card.label}`} className={dot === index ? 'active' : ''} onClick={() => { setIndex(dot); setPaused(true); window.setTimeout(() => setPaused(false), 3200) }} />)}</div>
+    <div className="carousel-dots">{cards.map((card, dot) => <button type="button" key={card.label} aria-label={`Go to card ${dot + 1}`} className={dot === index ? 'active' : ''} onClick={() => { setIndex(dot); setPaused(true); window.setTimeout(() => setPaused(false), 3200) }} />)}</div>
   </div>
 }

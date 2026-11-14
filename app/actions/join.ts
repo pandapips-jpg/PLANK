@@ -2,14 +2,57 @@
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { z } from 'zod'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { normalizeNgPhone } from '@/lib/phone'
 
 export type JoinActionState = { message: string } | null
 
+const joinInputSchema = z.object({
+  token: z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/, 'This link is not active. Ask your group admin for a new one.'),
+  name: z.string().trim().min(1, 'Please enter your name.').max(80, 'Names can be up to 80 characters.'),
+  phone: z.string().trim().min(1, 'Enter a valid Nigerian number like 0803 123 4567.').max(32, 'Enter a valid Nigerian number like 0803 123 4567.'),
+})
+
+async function findExistingMemberName(token: string, phoneNormalized: string) {
+  const admin = createAdminClient()
+  const { data: group, error: groupError } = await admin.from('groups')
+    .select('id')
+    .eq('join_token', token)
+    .maybeSingle()
+  if (groupError) {
+    console.error('Could not look up group for duplicate join phone', { code: groupError.code })
+    return null
+  }
+  if (!group) return null
+
+  const { data: member, error: memberError } = await admin.from('members')
+    .select('name')
+    .eq('group_id', group.id)
+    .eq('phone_normalized', phoneNormalized)
+    .neq('status', 'removed')
+    .limit(1)
+    .maybeSingle()
+  if (memberError) {
+    console.error('Could not look up member for duplicate join phone', { code: memberError.code })
+    return null
+  }
+  return member?.name ?? null
+}
+
 export async function joinGroupAction(_state: JoinActionState, formData: FormData): Promise<JoinActionState> {
-  const token = String(formData.get('token') ?? '')
-  const name = String(formData.get('name') ?? '')
-  const phone = String(formData.get('phone') ?? '')
+  const parsedInput = joinInputSchema.safeParse({
+    token: formData.get('token'),
+    name: formData.get('name'),
+    phone: formData.get('phone'),
+  })
+  if (!parsedInput.success) {
+    return { message: parsedInput.error.issues[0]?.message ?? 'Please check your details and try again.' }
+  }
+  const { token, name, phone } = parsedInput.data
+  const phoneNormalized = normalizeNgPhone(phone)
+  if (!phoneNormalized) return { message: 'Enter a valid Nigerian number like 0803 123 4567.' }
   const supabase = await createClient()
   const { data: joinInfoResponse, error: infoError } = await supabase.rpc('get_join_info', { p_token: token })
   if (infoError) throw infoError
@@ -19,7 +62,13 @@ export async function joinGroupAction(_state: JoinActionState, formData: FormDat
     p_name: name,
     p_phone: phone,
   })
-  if (error) throw error
+  if (error) {
+    if (error.code === '23505') {
+      const existingName = await findExistingMemberName(token, phoneNormalized)
+      if (existingName) return { message: `${existingName} already has this phone number in this group. Use a different number or leave it empty.` }
+    }
+    throw error
+  }
 
   const result = Array.isArray(data) ? data[0] : data
   if (!result) throw new Error('The group did not return a join result.')
@@ -35,6 +84,11 @@ export async function joinGroupAction(_state: JoinActionState, formData: FormDat
       path: '/',
     })
     redirect(`/pay/${result.pay_token}?welcome=1`)
+  }
+
+  if (result.status === 'busy') {
+    const existingName = await findExistingMemberName(token, phoneNormalized)
+    if (existingName) return { message: `${existingName} already has this phone number in this group. Use a different number or leave it empty.` }
   }
 
   const messages: Record<string, string> = {
