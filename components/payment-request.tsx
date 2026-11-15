@@ -70,7 +70,7 @@ export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payT
         if (!active) return
         if (!result.ok) {
           setError(result.error)
-          setErrorCode('')
+          setErrorCode(result.code ?? '')
           return
         }
         setError('')
@@ -182,5 +182,6 @@ export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payT
     </div>
     <p className="payment-waiting" role="status">Waiting for payment…</p>
     {error && <p className="payment-poll-error" role="alert">{error}</p>}
+    {errorCode && <small className="payment-error-code">{errorCode}</small>}
   </div>
 }

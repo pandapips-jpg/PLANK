@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
-import { getPagaHashKey } from '@/lib/env'
+import { EnvValidationError, getPagaHashKey } from '@/lib/env'
 import {
   isProcessedCallbackOutcome,
   processPagaCallback,
@@ -124,7 +124,10 @@ export async function POST(request: Request) {
       { status: result.status === 200 ? 'SUCCESS' : 'ERROR' },
       { status: result.status },
     )
-  } catch {
+  } catch (error) {
+    if (error instanceof EnvValidationError) {
+      console.error('Paga callback failed', { stage: 'env', problems: error.problems })
+    }
     return NextResponse.json({ status: 'ERROR' }, { status: 500 })
   }
 }

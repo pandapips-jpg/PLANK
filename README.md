@@ -4,6 +4,8 @@
 
 Configure these values in the server environment and local `.env.local`:
 
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `PAGA_PUBLIC_KEY`
 - `PAGA_SECRET_KEY`
 - `PAGA_HASH_KEY`

@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createPaymentRequest } from '@/lib/paga/collect'
 import { findReusablePaymentAttempt } from '@/lib/payments/attempts'
 import { normalizeNgPhone, toLocalNg } from '@/lib/phone'
-import { getPagaEnv } from '@/lib/env'
+import { EnvValidationError, getServerEnv, type EnvProblem } from '@/lib/env'
 import { getPaymentPageState } from '@/lib/payment-page-status'
 import { z } from 'zod'
 
@@ -35,11 +35,11 @@ export type StartPaymentResult =
       }
       reused: boolean
     }
-  | { error: string; code: PaymentStage }
+  | { error: string; code: string }
 
 export type AttemptStateResult =
   | { ok: true; status: 'open' | 'paid' | 'failed' | 'expired'; expiresAt: string | null }
-  | { ok: false; error: string }
+  | { ok: false; error: string; code?: string }
 
 function paymentAttemptError(error: { code?: string; message?: string }, operation: string) {
   console.error(`Payment attempt ${operation} failed`, { code: error.code, message: error.message })
@@ -62,8 +62,12 @@ function logStageError(stage: PaymentStage, error: unknown) {
   console.error('Payment request failed', { stage, ...exception })
 }
 
-function paymentFailure(stage: PaymentStage, error: string): StartPaymentResult {
-  return { error, code: stage }
+function envProblemCode(problems: EnvProblem[]) {
+  return `env: ${problems.map(({ name, problem }) => `${name} (${problem})`).join(', ')}`
+}
+
+function paymentFailure(stage: PaymentStage, error: string, code: string = stage): StartPaymentResult {
+  return { error, code }
 }
 
 export async function startPayment(payToken: string, payEarly = false): Promise<StartPaymentResult> {
@@ -77,7 +81,7 @@ export async function startPayment(payToken: string, payEarly = false): Promise<
     payToken = parsedInput.data.payToken
     payEarly = parsedInput.data.payEarly
 
-    const env = getPagaEnv()
+    const env = getServerEnv()
     const admin = createAdminClient()
 
     stage = 'find_member'
@@ -249,7 +253,12 @@ export async function startPayment(payToken: string, payEarly = false): Promise<
       },
     }
   } catch (error) {
-    logStageError(stage, error)
+    const envProblems = stage === 'env' && error instanceof EnvValidationError ? error.problems : null
+    if (envProblems) {
+      console.error('Payment request failed', { stage, problems: envProblems })
+    } else {
+      logStageError(stage, error)
+    }
     const message = stage === 'env'
       ? 'We could not start your payment. Please try again.'
       : stage === 'find_member'
@@ -259,7 +268,7 @@ export async function startPayment(payToken: string, payEarly = false): Promise<
           : stage === 'save_attempt'
             ? 'We could not save your payment request. Please try again.'
             : 'We could not create your payment request. Please try again.'
-    return paymentFailure(stage, message)
+    return paymentFailure(stage, message, envProblems ? envProblemCode(envProblems) : stage)
   }
 }
 
@@ -271,7 +280,18 @@ export async function getAttemptState(payToken: string, attemptId: string): Prom
   payToken = parsedInput.data.payToken
   attemptId = parsedInput.data.attemptId
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (error) {
+    if (!(error instanceof EnvValidationError)) throw error
+    console.error('Payment status check failed', { stage: 'env', problems: error.problems })
+    return {
+      ok: false,
+      error: 'We could not check this payment request.',
+      code: envProblemCode(error.problems),
+    }
+  }
   const { data: member, error: memberError } = await admin.from('members')
     .select('id')
     .eq('pay_token', payToken)
