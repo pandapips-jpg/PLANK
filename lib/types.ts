@@ -116,6 +116,7 @@ export type PublicLedger = {
     direction: 'in' | 'out'
     amount: number
     note: string
+    provider?: PaymentProviderName | null
   }>
 }
 
@@ -137,6 +138,7 @@ export type MemberPageData = {
   payments: Array<{
     amount: number
     paid_at: string
+    provider?: PaymentProviderName | null
   }>
   charges?: Charge[]
   visibility?: GroupVisibility

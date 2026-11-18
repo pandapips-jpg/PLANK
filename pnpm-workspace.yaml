@@ -7,3 +7,6 @@ minimumReleaseAgeExclude:
 overrides:
   baseline-browser-mapping: ^2.11.34
   body-parser: ^2.4.0
+
+allowBuilds:
+  esbuild: set this to true or false

@@ -7,6 +7,7 @@ import { WelcomeBanner } from '@/components/welcome-banner'
 import { friendlyDate, money, scheduleDate } from '@/lib/format'
 import { getPaymentPageState } from '@/lib/payment-page-status'
 import { firstContributionDate } from '@/lib/schedule'
+import { isDemoMode } from '@/lib/env'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { MemberPageData } from '@/lib/types'
@@ -111,6 +112,7 @@ export default async function MemberPaymentPage({ params, searchParams }: { para
         payToken={token}
         dueAmount={paymentState.amount}
         payEarly={paymentState.kind === 'upcoming'}
+        demoMode={isDemoMode()}
       />}
       <div className="history"><h2>Your payments</h2>{payments.length === 0 ? <div className="empty">No payments recorded yet.</div> : payments.map((payment) => <div className="history-row" key={`${payment.paid_at}-${payment.amount}`}><div><b>Payment recorded</b><span>Paid on {friendlyDate(payment.paid_at)}</span></div><Badge paid /><strong>{money(payment.amount)}</strong></div>)}</div>
       {data.ledger_available && <Link className="button secondary" href={`/pay/${token}/ledger`}>See group ledger <ArrowRight size={16} /></Link>}

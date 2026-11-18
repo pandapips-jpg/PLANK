@@ -1,12 +1,14 @@
 'use server'
 
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createPaymentRequest } from '@/lib/paga/collect'
+import { recordPayment } from '@/lib/paga/callback'
 import { findReusablePaymentAttempt } from '@/lib/payments/attempts'
 import { normalizeNgPhone, toLocalNg } from '@/lib/phone'
-import { EnvValidationError, getServerEnv, type EnvProblem } from '@/lib/env'
+import { EnvValidationError, getServerEnv, isDemoMode, shouldUsePaga, type EnvProblem } from '@/lib/env'
 import { getPaymentPageState } from '@/lib/payment-page-status'
+import type { CallbackPayment } from '@/lib/paga/callback'
 import { z } from 'zod'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -40,6 +42,10 @@ export type StartPaymentResult =
 export type AttemptStateResult =
   | { ok: true; status: 'open' | 'paid' | 'failed' | 'expired'; expiresAt: string | null }
   | { ok: false; error: string; code?: string }
+
+export type SimulateDemoPaymentResult = { ok: true } | { ok: false; error: string }
+
+const demoUnavailableMessage = 'Demo payment is not available for this request.'
 
 function paymentAttemptError(error: { code?: string; message?: string }, operation: string) {
   console.error(`Payment attempt ${operation} failed`, { code: error.code, message: error.message })
@@ -81,7 +87,24 @@ export async function startPayment(payToken: string, payEarly = false): Promise<
     payToken = parsedInput.data.payToken
     payEarly = parsedInput.data.payEarly
 
-    const env = getServerEnv()
+    const demoMode = isDemoMode()
+    const usePaga = shouldUsePaga()
+    let env: ReturnType<typeof getServerEnv> | null = null
+    if (usePaga) {
+      if (!demoMode) {
+        env = getServerEnv()
+      } else {
+        try {
+          env = getServerEnv()
+        } catch (error) {
+          if (!(error instanceof EnvValidationError)) throw error
+          console.info('Demo payment request will use fallback details', {
+            stage: 'env',
+            problems: error.problems,
+          })
+        }
+      }
+    }
     const admin = createAdminClient()
 
     stage = 'find_member'
@@ -149,7 +172,7 @@ export async function startPayment(payToken: string, payEarly = false): Promise<
 
     const phone = toLocalNg(member.phone_normalized ?? '')
       ?? toLocalNg(normalizeNgPhone(member.phone ?? '') ?? '')
-    if (!phone) {
+    if (usePaga && !phone) {
       console.error('Payment request failed', { stage, reason: 'missing_phone' })
       return paymentFailure(stage, missingPhoneMessage)
     }
@@ -167,7 +190,13 @@ export async function startPayment(payToken: string, payEarly = false): Promise<
       logSupabaseError(stage, attemptsError)
       return paymentFailure(stage, 'We could not check for an existing payment request. Please try again.')
     }
-    const reusable = findReusablePaymentAttempt(openAttempts ?? [], due, now)
+    const reusableAttempts = (openAttempts ?? []).filter((attempt) =>
+      env !== null || (
+        attempt.reference_number.startsWith('DEMO')
+        && attempt.bank_name === 'Paga (Demo)'
+      )
+    )
+    const reusable = findReusablePaymentAttempt(reusableAttempts, due, now)
     if (reusable?.account_number && reusable.bank_name && reusable.total_amount !== null && reusable.expires_at) {
       return {
         ok: true,
@@ -183,23 +212,47 @@ export async function startPayment(payToken: string, payEarly = false): Promise<
       }
     }
 
-    const expiresAt = new Date(now.getTime() + env.pagaRequestExpiryMinutes * 60 * 1000)
-    const referenceNumber = `PLK${randomUUID().replace(/-/g, '')}`
+    const expiresAt = new Date(now.getTime() + (env?.pagaRequestExpiryMinutes ?? 30) * 60 * 1000)
+    let referenceNumber = `PLK${randomUUID().replace(/-/g, '')}`
     stage = 'paga_request'
-    const request = await createPaymentRequest({
-      referenceNumber,
-      amount: due,
-      phoneNumber: phone,
-      callbackUrl: `${env.publicAppUrl}/api/paga/payment-callback`,
-      expiresAt,
-    })
+    let request: Awaited<ReturnType<typeof createPaymentRequest>> | null = null
+    if (env && phone) {
+      try {
+        request = await createPaymentRequest({
+          referenceNumber,
+          amount: due,
+          phoneNumber: phone,
+          callbackUrl: `${env.publicAppUrl}/api/paga/payment-callback`,
+          expiresAt,
+        })
+      } catch (error) {
+        if (!demoMode) throw error
+        logStageError(stage, error)
+      }
+    }
 
-    if (!request.ok) {
+    if ((!request || !request.ok) && demoMode) {
+      referenceNumber = `DEMO${randomUUID().replace(/-/g, '')}`
+      const demoExpiresAt = new Date(now.getTime() + 30 * 60 * 1000)
+      request = {
+        ok: true,
+        statusCode: '0',
+        statusMessage: 'Demo payment request',
+        httpStatus: 200,
+        accountNumber: String(randomInt(1_000_000_000, 10_000_000_000)),
+        bankName: 'Paga (Demo)',
+        totalAmount: due,
+        expiresAt: demoExpiresAt.toISOString(),
+        hashVariant: 'plain',
+      }
+    }
+
+    if (!request || !request.ok) {
       console.error('Payment request failed', {
         stage: 'paga_request',
-        statusCode: request.statusCode,
-        statusMessage: request.statusMessage,
-        httpStatus: request.httpStatus,
+        statusCode: request?.statusCode ?? 'UNAVAILABLE',
+        statusMessage: request?.statusMessage ?? 'Paga configuration unavailable.',
+        httpStatus: request?.httpStatus ?? 0,
       })
       stage = 'insert_attempt'
       const { error: insertError } = await admin.from('payment_attempts').insert({
@@ -343,4 +396,103 @@ export async function getAttemptState(payToken: string, attemptId: string): Prom
   }
 
   return { ok: true, status, expiresAt: attempt.expires_at }
+}
+
+export async function simulateDemoPayment(token: string, attemptId: string): Promise<SimulateDemoPaymentResult> {
+  if (!isDemoMode()) return { ok: false, error: 'Demo payments are not enabled.' }
+
+  const parsedInput = attemptStateInputSchema.safeParse({ payToken: token, attemptId })
+  if (!parsedInput.success) return { ok: false, error: demoUnavailableMessage }
+
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (error) {
+    if (error instanceof EnvValidationError) {
+      console.error('Demo payment failed', { stage: 'env', problems: error.problems })
+      return { ok: false, error: 'We could not confirm this demo payment.' }
+    }
+    throw error
+  }
+
+  const { data: member, error: memberError } = await admin.from('members')
+    .select('id')
+    .eq('pay_token', parsedInput.data.payToken)
+    .eq('status', 'active')
+    .maybeSingle()
+  if (memberError) {
+    paymentAttemptError(memberError, 'demo member lookup')
+    return { ok: false, error: 'We could not confirm this demo payment.' }
+  }
+  if (!member) return { ok: false, error: demoUnavailableMessage }
+
+  const { data: attempt, error: attemptError } = await admin.from('payment_attempts')
+    .select('*')
+    .eq('id', parsedInput.data.attemptId)
+    .eq('member_id', member.id)
+    .eq('status', 'open')
+    .maybeSingle()
+  if (attemptError) {
+    paymentAttemptError(attemptError, 'demo attempt lookup')
+    return { ok: false, error: 'We could not confirm this demo payment.' }
+  }
+  if (!attempt) return { ok: false, error: demoUnavailableMessage }
+
+  const expiresAt = attempt.expires_at ? new Date(attempt.expires_at).getTime() : 0
+  if (expiresAt <= Date.now()) {
+    const { error } = await admin.from('payment_attempts')
+      .update({ status: 'expired' })
+      .eq('id', attempt.id)
+      .eq('member_id', member.id)
+      .eq('status', 'open')
+    if (error) paymentAttemptError(error, 'demo attempt expiry')
+    return { ok: false, error: demoUnavailableMessage }
+  }
+
+  const recorder = {
+    async insertPayment(payment: CallbackPayment) {
+      const { error } = await admin.from('payments').insert(payment)
+      if (error?.code === '23505') return 'duplicate' as const
+      if (error) throw new Error('Could not record demo payment.')
+      return 'inserted' as const
+    },
+    async markAttemptPaid(id: string) {
+      const { error } = await admin.from('payment_attempts')
+        .update({ status: 'paid' })
+        .eq('id', id)
+      if (error) throw new Error('Could not update demo payment request.')
+    },
+    async getMemberName(memberId: string) {
+      const { data, error } = await admin.from('members').select('name').eq('id', memberId).single()
+      if (error || !data) throw new Error('Could not load demo payment member.')
+      return data.name
+    },
+    async insertNotification(input: {
+      group_id: string
+      member_id: string
+      kind: string
+      title: string
+      body: string
+    }) {
+      const { error } = await admin.from('notifications').insert(input)
+      if (error) throw new Error('Could not create demo payment notification.')
+    },
+  }
+  const payment: CallbackPayment = {
+    group_id: attempt.group_id,
+    member_id: attempt.member_id,
+    amount: Number(attempt.amount),
+    provider_reference: `DEMO-${attempt.id}`,
+    provider: 'demo',
+    provider_fee: 0,
+    payer_name: null,
+    paid_at: new Date().toISOString(),
+  }
+  try {
+    await recordPayment(attempt, payment, recorder)
+    return { ok: true }
+  } catch (error) {
+    logStageError('save_attempt', error)
+    return { ok: false, error: 'We could not confirm this demo payment.' }
+  }
 }

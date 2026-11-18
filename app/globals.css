@@ -166,6 +166,9 @@ button { cursor: pointer; }
 .mobile-header-actions { display:flex; align-items:center; gap:9px; min-width:0; }
 .mobile-header-actions .notifications-panel { left:auto; right:0; }
 .payment-request-card { margin-top:14px; padding:18px; border:2px solid var(--ink); border-radius:13px; background:#fff; box-shadow:3px 3px 0 var(--ink); }
+.demo-payment-controls { display:grid; justify-items:start; gap:9px; margin-top:12px; }
+.demo-payment-controls .button { justify-content:center; }
+.demo-payment-controls .demo-banner { display:inline-flex; width:max-content; max-width:100%; margin:0; padding:6px 9px; font-size:10px; }
 .payment-request-start { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .payment-request-start > div { display:flex; flex-direction:column; gap:5px; }
 .payment-request-start small,.payment-request-heading small,.payment-account-line small { color:var(--muted); font-size:10px; }

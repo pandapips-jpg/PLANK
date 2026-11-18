@@ -27,10 +27,52 @@ export type ServerEnv = {
   supabaseUrl: string
 }
 
+export function isDemoMode() {
+  return process.env.DEMO_MODE?.trim().toLowerCase() === 'true'
+}
+
+export function shouldUsePaga() {
+  return !isDemoMode() || process.env.DEMO_USE_PAGA?.trim().toLowerCase() === 'true'
+}
+
 type EnvReader = {
   required(name: string, validate?: (value: string) => string | undefined): string
   requestExpiryMinutes(): number
   throwIfInvalid(): void
+}
+
+let pagaEnvDiagnosticLogged = false
+
+function normalizePagaValue(value: string) {
+  const trimmed = value.trim()
+  const first = trimmed.charAt(0)
+  const last = trimmed.charAt(trimmed.length - 1)
+  if ((first === '"' || first === "'") && last === first) {
+    return trimmed.slice(1, -1).trim()
+  }
+  return trimmed
+}
+
+function logPagaEnvDiagnostic() {
+  if (pagaEnvDiagnosticLogged) return
+  pagaEnvDiagnosticLogged = true
+
+  const rawBaseUrl = process.env.PAGA_BASE_URL
+  let host = 'invalid'
+  if (rawBaseUrl) {
+    try {
+      host = new URL(normalizePagaValue(rawBaseUrl)).hostname.toLowerCase()
+    } catch {
+      host = 'invalid'
+    }
+  }
+  const rawHashKey = process.env.PAGA_HASH_KEY
+  console.info('Paga environment diagnostic', {
+    host,
+    isBetaCollectHost: host === 'beta-collect.paga.com',
+    isLiveCollectHost: host === 'collect.paga.com',
+    hashKeyHadLeadingOrTrailingWhitespace: rawHashKey !== undefined && rawHashKey !== rawHashKey.trim(),
+  })
 }
 
 function createEnvReader(): EnvReader {
@@ -43,7 +85,7 @@ function createEnvReader(): EnvReader {
       return ''
     }
 
-    const value = rawValue.trim()
+    const value = name.startsWith('PAGA_') ? normalizePagaValue(rawValue) : rawValue.trim()
     if (!value) {
       problems.push({ name, problem: 'empty' })
       return ''
@@ -56,7 +98,7 @@ function createEnvReader(): EnvReader {
 
   function requestExpiryMinutes() {
     const rawValue = process.env.PAGA_REQUEST_EXPIRY_MINUTES
-    const value = rawValue?.trim()
+    const value = rawValue === undefined ? undefined : normalizePagaValue(rawValue)
     if (!value) return 360
 
     const minutes = Number(value)
@@ -94,6 +136,7 @@ function readPagaEnv(reader: EnvReader): Pick<
   ServerEnv,
   'pagaPublicKey' | 'pagaSecretKey' | 'pagaHashKey' | 'pagaBaseUrl' | 'pagaRequestExpiryMinutes' | 'publicAppUrl'
 > {
+  logPagaEnvDiagnostic()
   const pagaPublicKey = reader.required('PAGA_PUBLIC_KEY')
   const pagaSecretKey = reader.required('PAGA_SECRET_KEY')
   const pagaHashKey = reader.required('PAGA_HASH_KEY')

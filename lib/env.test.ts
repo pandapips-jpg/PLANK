@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
 
-import { EnvValidationError, getServerEnv } from './env'
+import { EnvValidationError, getServerEnv, isDemoMode, shouldUsePaga } from './env'
 
 const envNames = [
   'NEXT_PUBLIC_SUPABASE_URL',
@@ -13,6 +13,8 @@ const envNames = [
   'PAGA_BASE_URL',
   'NEXT_PUBLIC_APP_URL',
   'PAGA_REQUEST_EXPIRY_MINUTES',
+  'DEMO_MODE',
+  'DEMO_USE_PAGA',
 ]
 
 let originalEnv: Map<string, string | undefined>
@@ -37,6 +39,24 @@ afterEach(() => {
 })
 
 describe('environment validation', () => {
+  it('keeps demo mode disabled by default and enables only the server flag', () => {
+    expect(isDemoMode()).toBe(false)
+    process.env.DEMO_MODE = 'true'
+    expect(isDemoMode()).toBe(true)
+    process.env.DEMO_MODE = 'false'
+    expect(isDemoMode()).toBe(false)
+  })
+
+  it('uses Paga in normal mode, but only in demo mode with explicit opt-in', () => {
+    expect(shouldUsePaga()).toBe(true)
+    process.env.DEMO_MODE = 'true'
+    expect(shouldUsePaga()).toBe(false)
+    process.env.DEMO_USE_PAGA = 'true'
+    expect(shouldUsePaga()).toBe(true)
+    process.env.DEMO_USE_PAGA = 'false'
+    expect(shouldUsePaga()).toBe(false)
+  })
+
   it('collects missing, empty, and invalid problems without including values', () => {
     delete process.env.NEXT_PUBLIC_SUPABASE_URL
     delete process.env.SUPABASE_SERVICE_ROLE_KEY

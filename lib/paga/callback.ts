@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { LosslessNumber, parse } from 'lossless-json'
-import type { PaymentAttempt } from '@/lib/types'
+import type { PaymentAttempt, PaymentProviderName } from '@/lib/types'
 
 export const MAX_CALLBACK_BODY_BYTES = 32 * 1024
 
@@ -92,24 +92,15 @@ export type CallbackPayment = {
   member_id: string
   amount: number
   provider_reference: string
-  provider: 'paga'
+  provider: PaymentProviderName
   provider_fee: number
   payer_name: string | null
   paid_at: string
 }
 
-export type PagaCallbackStore = {
-  saveReceived(headers: Record<string, string>, rawBody: string): Promise<string>
-  claimNotification(
-    eventRecordId: string,
-    notificationId: string,
-    eventType: string,
-  ): Promise<{ recordId: string; duplicateRecordId: string | null; alreadyProcessed: boolean }>
-  finish(eventRecordId: string, hashOk: boolean | null, outcome: string): Promise<void>
-  findAttempt(referenceNumber: string): Promise<PaymentAttempt | null>
+export type PaymentRecorderStore = {
   insertPayment(payment: CallbackPayment): Promise<'inserted' | 'duplicate'>
   markAttemptPaid(attemptId: string): Promise<void>
-  markAttemptExpired(attemptId: string): Promise<void>
   getMemberName(memberId: string): Promise<string>
   insertNotification(input: {
     group_id: string
@@ -118,6 +109,18 @@ export type PagaCallbackStore = {
     title: string
     body: string
   }): Promise<void>
+}
+
+export type PagaCallbackStore = PaymentRecorderStore & {
+  saveReceived(headers: Record<string, string>, rawBody: string): Promise<string>
+  claimNotification(
+    eventRecordId: string,
+    notificationId: string,
+    eventType: string,
+  ): Promise<{ recordId: string; duplicateRecordId: string | null; alreadyProcessed: boolean }>
+  finish(eventRecordId: string, hashOk: boolean | null, outcome: string): Promise<void>
+  findAttempt(referenceNumber: string): Promise<PaymentAttempt | null>
+  markAttemptExpired(attemptId: string): Promise<void>
 }
 
 type ParsedCallback = {
@@ -223,6 +226,26 @@ function paymentDate(value: string) {
 
 function withHash(outcome: string, variant: string) {
   return `${outcome}; hash=${variant}`
+}
+
+export async function recordPayment(
+  attempt: PaymentAttempt,
+  payment: CallbackPayment,
+  store: PaymentRecorderStore,
+): Promise<'inserted' | 'duplicate'> {
+  const inserted = await store.insertPayment(payment)
+  await store.markAttemptPaid(attempt.id)
+  if (inserted === 'duplicate') return inserted
+
+  const memberName = await store.getMemberName(attempt.member_id)
+  await store.insertNotification({
+    group_id: attempt.group_id,
+    member_id: attempt.member_id,
+    kind: 'payment_received',
+    title: 'Payment received',
+    body: `${memberName} paid ${payment.amount.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}.`,
+  })
+  return inserted
 }
 
 export async function processPagaCallback(
@@ -337,20 +360,8 @@ export async function processPagaCallback(
       payer_name: callback.payerName || null,
       paid_at: paymentDate(callback.paidAt),
     }
-    const inserted = await store.insertPayment(payment)
-    if (inserted === 'duplicate') {
-      await store.markAttemptPaid(attempt.id)
-      return outcome('duplicate')
-    }
-    await store.markAttemptPaid(attempt.id)
-    const memberName = await store.getMemberName(attempt.member_id)
-    await store.insertNotification({
-      group_id: attempt.group_id,
-      member_id: attempt.member_id,
-      kind: 'payment_received',
-      title: 'Payment received',
-      body: `${memberName} paid ${amount.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}.`,
-    })
+    const inserted = await recordPayment(attempt, payment, store)
+    if (inserted === 'duplicate') return outcome('duplicate')
     const matchesExpected = Math.abs(totalPaymentAmount - expectedTotal) < 0.01
     return outcome(matchesExpected ? 'processed' : 'amount_mismatch')
   } catch {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy } from 'lucide-react'
-import { getAttemptState, startPayment, type StartPaymentResult } from '@/app/actions/payments'
+import { getAttemptState, simulateDemoPayment, startPayment, type StartPaymentResult } from '@/app/actions/payments'
 import { money } from '@/lib/format'
 import type { PaymentAttempt } from '@/lib/types'
 
@@ -42,11 +42,13 @@ function countdown(expiresAt: string, now: number) {
     : `${minutes}m ${String(remainingSeconds).padStart(2, '0')}s`
 }
 
-export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payToken: string; dueAmount: number; payEarly?: boolean }) {
+export function PaymentRequest({ payToken, dueAmount, payEarly = false, demoMode = false }: { payToken: string; dueAmount: number; payEarly?: boolean; demoMode?: boolean }) {
   const router = useRouter()
   const [attempt, setAttempt] = useState<AttemptDetails | null>(null)
   const [status, setStatus] = useState<AttemptStatus | null>(null)
   const [starting, setStarting] = useState(false)
+  const [simulating, setSimulating] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState('')
   const [errorCode, setErrorCode] = useState('')
   const [now, setNow] = useState(() => Date.now())
@@ -90,12 +92,12 @@ export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payT
       }
     }
     void checkStatus()
-    const timer = window.setInterval(() => void checkStatus(), 5000)
+    const timer = window.setInterval(() => void checkStatus(), confirming ? 1000 : 5000)
     return () => {
       active = false
       window.clearInterval(timer)
     }
-  }, [attempt, payToken, router, status])
+  }, [attempt, confirming, payToken, router, status])
 
   async function createRequest() {
     setStarting(true)
@@ -111,6 +113,7 @@ export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payT
       }
       setAttempt(result.attempt)
       setStatus('open')
+      setConfirming(false)
       refreshed.current = false
     } catch {
       setError('We could not create your payment request. Please try again.')
@@ -120,6 +123,31 @@ export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payT
     }
   }
 
+  async function confirmDemoPayment() {
+    if (!attempt) return
+    setSimulating(true)
+    setError('')
+    setErrorCode('')
+    try {
+      const result = await simulateDemoPayment(payToken, attempt.id)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setConfirming(true)
+      window.setTimeout(() => setConfirming(false), 2000)
+    } catch {
+      setError('We could not confirm this demo payment. Please try again.')
+    } finally {
+      setSimulating(false)
+    }
+  }
+
+  if (confirming) {
+    return <div className="payment-request-card payment-request-state" role="status">
+      <b>Confirming transfer...</b>
+    </div>
+  }
   if (status === 'paid') {
     return <div className="payment-request-card payment-request-state" role="status">
       <b>Payment confirmed</b>
@@ -171,7 +199,7 @@ export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payT
       <div><small>Account number</small><strong>{attempt.accountNumber}</strong></div>
       <CopyValueButton value={attempt.accountNumber} label="account number" />
     </div>
-    <p className="payment-bank-hint"><b>Bank:</b> {attempt.bankName}. Choose Paga in your bank app’s bank list.</p>
+    <p className="payment-bank-hint"><b>Bank:</b> {attempt.bankName}. {demoMode ? 'Do not send money; use the button below to simulate a payment.' : 'Choose Paga in your bank app’s bank list.'}</p>
     <div className="payment-request-details">
       <div className="payment-detail-row">
         <div><small>Exact amount to send</small><strong>{money(attempt.totalAmount)}</strong></div>
@@ -180,6 +208,12 @@ export function PaymentRequest({ payToken, dueAmount, payEarly = false }: { payT
       <p className="payment-fee-line">{money(attempt.amount)} dues + {money(fee)} payment fee</p>
       <div className="payment-detail-row payment-expiry-row"><span>Expires in</span><strong>{countdown(attempt.expiresAt, now)}</strong></div>
     </div>
+    {demoMode && <div className="demo-payment-controls">
+      <button className="button primary" type="button" disabled={simulating} onClick={confirmDemoPayment}>
+        {simulating ? 'Confirming transfer...' : 'I have sent it'}
+      </button>
+      <small className="demo-banner">Demo mode: simulated transfer, no real money</small>
+    </div>}
     <p className="payment-waiting" role="status">Waiting for payment…</p>
     {error && <p className="payment-poll-error" role="alert">{error}</p>}
     {errorCode && <small className="payment-error-code">{errorCode}</small>}

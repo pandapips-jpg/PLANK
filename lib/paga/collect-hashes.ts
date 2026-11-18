@@ -7,14 +7,14 @@ function sha512(value: string) {
 export function paymentRequestHash(
   referenceNumber: string,
   amountText: string,
-  phoneNumber: string,
+  payerPhoneNumber: string,
   hashKey: string,
 ) {
   return sha512([
     referenceNumber,
     amountText,
     'NGN',
-    phoneNumber,
+    payerPhoneNumber,
     '',
     '',
     '',
@@ -22,6 +22,11 @@ export function paymentRequestHash(
     '',
     hashKey,
   ].join(''))
+}
+
+export function javaStyleAmountText(amount: number) {
+  const plainAmount = String(amount)
+  return Number.isInteger(amount) ? `${plainAmount}.0` : plainAmount
 }
 
 export function paymentStatusHash(referenceNumber: string, hashKey: string) {
