@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Bell, Copy, MessageCircle } from 'lucide-react'
 import { PageHeader } from '@/components/plank-ui'
 import { useAppInfo } from '@/components/app-shell'
+import { recordReminderSent } from '@/app/actions/reminders'
 import { createClient } from '@/lib/supabase/client'
 import { groupLabels } from '@/lib/labels'
 import { getMemberStatus, type MemberStatus } from '@/lib/status'
@@ -50,7 +51,12 @@ export default function RemindPage() {
   const [error, setError] = useState('')
   const [rowMessage, setRowMessage] = useState<Record<string, string>>({})
   const [openedMembers, setOpenedMembers] = useState<Record<string, boolean>>({})
+  const [remindedMembers, setRemindedMembers] = useState<Record<string, boolean>>({})
+  const [recordingMembers, setRecordingMembers] = useState<Record<string, boolean>>({})
   const [copiedMembers, setCopiedMembers] = useState<Record<string, boolean>>({})
+  const [selectedMemberId, setSelectedMemberId] = useState('')
+  const [bulkIndex, setBulkIndex] = useState<number | null>(null)
+  const [bulkCompleted, setBulkCompleted] = useState(false)
 
   useEffect(() => { setOrigin(window.location.origin) }, [])
 
@@ -101,6 +107,7 @@ export default function RemindPage() {
           || (a.status.nextDue ?? '').localeCompare(b.status.nextDue ?? '')
       })
       setMembers(owing)
+      setSelectedMemberId((current) => current && owing.some((member) => member.id === current) ? current : owing[0]?.id ?? '')
       setError('')
       setLoading(false)
     }
@@ -123,7 +130,7 @@ export default function RemindPage() {
     }
   }
 
-  function openWhatsApp(member: OwingMember) {
+  async function openWhatsApp(member: OwingMember) {
     const number = member.phone_normalized ?? normalizeNgPhone(member.phone)
     if (!number) {
       setRowMessage((current) => ({ ...current, [member.id]: 'Add a valid WhatsApp number first.' }))
@@ -132,9 +139,46 @@ export default function RemindPage() {
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(getMessage(member))}`, '_blank', 'noopener,noreferrer')
     setOpenedMembers((current) => ({ ...current, [member.id]: true }))
     setRowMessage((current) => ({ ...current, [member.id]: '' }))
+    if (remindedMembers[member.id] || recordingMembers[member.id]) return
+
+    setRecordingMembers((current) => ({ ...current, [member.id]: true }))
+    try {
+      const result = await recordReminderSent(group.id, member.id)
+      if (!result.ok) {
+        setRowMessage((current) => ({ ...current, [member.id]: result.error }))
+        return
+      }
+      setRemindedMembers((current) => ({ ...current, [member.id]: true }))
+    } catch {
+      setRowMessage((current) => ({ ...current, [member.id]: 'WhatsApp opened, but we could not record the reminder. Please try again.' }))
+    } finally {
+      setRecordingMembers((current) => ({ ...current, [member.id]: false }))
+    }
   }
 
-  const firstMember = members[0]
+  const overdueMembers = members.filter((member) => member.status.state === 'overdue')
+  const selectedMember = (bulkIndex === null ? null : overdueMembers[bulkIndex])
+    ?? members.find((member) => member.id === selectedMemberId)
+    ?? members[0]
+
+  function startRemindingOverdue() {
+    if (overdueMembers.length === 0) return
+    setBulkIndex(0)
+    setBulkCompleted(false)
+    setSelectedMemberId(overdueMembers[0].id)
+  }
+
+  function nextOverdueMember() {
+    if (bulkIndex === null) return
+    const nextIndex = bulkIndex + 1
+    if (nextIndex >= overdueMembers.length) {
+      setBulkIndex(null)
+      setBulkCompleted(true)
+      return
+    }
+    setBulkIndex(nextIndex)
+    setSelectedMemberId(overdueMembers[nextIndex].id)
+  }
 
   return <>
     <PageHeader group={group} eyebrow={group.name} title="Reminders" description="Send a friendly reminder to people who have a bill due." />
@@ -143,24 +187,48 @@ export default function RemindPage() {
       : <div className="remind-grid">
         <div className="content-card">
           <div className="card-head">
-            <div><h2>Message preview</h2><p>{firstMember ? `For ${firstMember.name}` : ''}</p></div>
+            <div><h2>Message preview</h2><p>{selectedMember ? `For ${selectedMember.name}` : ''}</p></div>
             <div className="toggle" aria-label="Message language">
               {(['English', 'Pidgin'] as const).map((value) => <button key={value} type="button" className={language === value ? 'selected' : ''} aria-pressed={language === value} onClick={() => setLanguage(value)}>{value}</button>)}
             </div>
           </div>
-          {firstMember && <p className="message-preview">{getMessage(firstMember)}</p>}
+          <div className="reminder-bulk-controls">
+            {overdueMembers.length > 0 && <button type="button" className="button secondary" onClick={startRemindingOverdue}>Remind all overdue</button>}
+            {bulkIndex !== null && <><span>Overdue reminder {bulkIndex + 1} of {overdueMembers.length}</span><button type="button" className="button secondary" onClick={nextOverdueMember}>Next</button></>}
+            {bulkCompleted && <span role="status">All overdue members reviewed.</span>}
+          </div>
+          {selectedMember && <div className="whatsapp-phone-frame" aria-label={`WhatsApp preview for ${selectedMember.name}`}>
+            <div className="whatsapp-preview-header">
+              <span className="whatsapp-preview-avatar" aria-hidden="true">{selectedMember.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span>
+              <div><b>{selectedMember.name}</b><small>Message preview</small></div>
+            </div>
+            <div className="whatsapp-preview-chat">
+              <span className="whatsapp-preview-day">Today</span>
+              <div className="whatsapp-preview-bubble">
+                <p>{getMessage(selectedMember)}</p>
+                <time>{new Intl.DateTimeFormat('en-NG', { hour: 'numeric', minute: '2-digit' }).format(new Date())}</time>
+              </div>
+            </div>
+            <button type="button" className="button primary whatsapp-preview-open" disabled={recordingMembers[selectedMember.id]} onClick={() => void openWhatsApp(selectedMember)}>
+              <MessageCircle size={15} />{recordingMembers[selectedMember.id] ? 'Recording reminder...' : 'Open in WhatsApp'}
+            </button>
+          </div>}
           <div className="card-head"><div><h2>People with bills due</h2><p>{members.length} {members.length === 1 ? 'person' : 'people'} have a bill due.</p></div></div>
           <div className="member-list">
             {members.map((member) => {
               const phone = member.phone_normalized ?? normalizeNgPhone(member.phone)
-              return <div className="member-row" key={member.id}>
+              return <div className={`member-row reminder-member-row${selectedMember?.id === member.id ? ' reminder-member-selected' : ''}`} key={member.id}>
                 <div className="member-name"><b>{member.name}</b><span>{member.status.label} · {member.phone_normalized ? `+${member.phone_normalized}` : normalizeNgPhone(member.phone) ? `+${normalizeNgPhone(member.phone)}` : member.phone || 'No phone number'}</span>
-                  {openedMembers[member.id] && <span role="status">Opened WhatsApp</span>}
+                  {remindedMembers[member.id] && <span className="reminded-status" role="status">Reminded</span>}
+                  {openedMembers[member.id] && !remindedMembers[member.id] && <span role="status">Opened WhatsApp</span>}
                   {copiedMembers[member.id] && <span role="status">Message copied</span>}
                   {rowMessage[member.id] && <span role="alert">{rowMessage[member.id]}</span>}
                 </div>
-                <button type="button" className="button secondary" disabled={!phone} onClick={() => openWhatsApp(member)}><MessageCircle size={15} />Send on WhatsApp</button>
-                <button type="button" className="copy-button" onClick={() => copyMessage(member)}><Copy size={15} />Copy message</button>
+                <div className="reminder-row-actions">
+                  <button type="button" className="reminder-preview-button" aria-pressed={selectedMember?.id === member.id} onClick={() => { setSelectedMemberId(member.id); setBulkIndex(null); setBulkCompleted(false) }}>Preview</button>
+                  <button type="button" className="button secondary" disabled={!phone || recordingMembers[member.id]} onClick={() => void openWhatsApp(member)}><MessageCircle size={15} />Send on WhatsApp</button>
+                  <button type="button" className="copy-button" onClick={() => copyMessage(member)}><Copy size={15} />Copy message</button>
+                </div>
               </div>
             })}
           </div>
