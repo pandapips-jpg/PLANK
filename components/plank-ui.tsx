@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { money } from '@/lib/format'
@@ -52,7 +52,9 @@ export type Stats = {
 export function StatsCarousel({ stats }: { stats: Stats }) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
+  const trackRef = useRef<HTMLDivElement>(null)
   const touchStart = useRef<number | null>(null)
+  const resumeTimer = useRef<number | null>(null)
   const cards = [
     { label: 'Money in this month', value: money(stats.inThisMonth), note: stats.changePercent === null ? '' : `${stats.changePercent >= 0 ? '↑' : '↓'} ${Math.abs(stats.changePercent)}% from last month`, tone: 'blue' },
     { label: 'Paid up', value: `${stats.paidCount} of ${stats.memberCount}`, note: 'People paid up', tone: 'yellow' },
@@ -61,18 +63,69 @@ export function StatsCarousel({ stats }: { stats: Stats }) {
     { label: 'Money out this month', value: money(stats.outThisMonth), note: 'Recorded from the group account', tone: 'cream' },
     { label: 'Balance', value: money(stats.balance), note: 'Total money in the account', tone: 'ink' },
   ]
-  const move = (direction: number) => setIndex((current) => (current + direction + cards.length) % cards.length)
+  const goTo = useCallback((nextIndex: number) => {
+    const next = (nextIndex + cards.length) % cards.length
+    setIndex(next)
+    const track = trackRef.current
+    if (track) {
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      track.scrollTo({ left: next * track.clientWidth, behavior: reducedMotion ? 'auto' : 'smooth' })
+    }
+  }, [cards.length])
 
   useEffect(() => {
     if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const timer = window.setInterval(() => move(1), 5000)
+    const timer = window.setInterval(() => goTo(index + 1), 5000)
     return () => window.clearInterval(timer)
-  }, [paused])
+  }, [goTo, index, paused])
 
-  return <div className="stats-carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)} onTouchStart={(event) => { touchStart.current = event.touches[0]?.clientX ?? null; setPaused(true) }} onTouchEnd={(event) => { if (touchStart.current !== null) { const distance = event.changedTouches[0]?.clientX - touchStart.current; if (distance !== undefined && Math.abs(distance) > 35) move(distance < 0 ? 1 : -1) } touchStart.current = null; window.setTimeout(() => setPaused(false), 3200) }}>
-    <button className="carousel-arrow left" aria-label="Previous card" onClick={() => move(-1)}><ArrowLeft size={18} /></button>
-    <div className={`stat-carousel-card ${cards[index].tone}`}><span>{cards[index].label}</span><strong>{cards[index].value}</strong>{cards[index].note && <small>{cards[index].note}</small>}</div>
-    <button className="carousel-arrow right" aria-label="Next card" onClick={() => move(1)}><ArrowRight size={18} /></button>
-    <div className="carousel-dots">{cards.map((card, dot) => <button type="button" key={card.label} aria-label={`Go to card ${dot + 1}`} className={dot === index ? 'active' : ''} onClick={() => { setIndex(dot); setPaused(true); window.setTimeout(() => setPaused(false), 3200) }} />)}</div>
+  useEffect(() => () => {
+    if (resumeTimer.current !== null) window.clearTimeout(resumeTimer.current)
+  }, [])
+
+  function handleTrackScroll() {
+    const track = trackRef.current
+    if (!track || track.clientWidth === 0) return
+    setIndex(Math.round(track.scrollLeft / track.clientWidth) % cards.length)
+  }
+
+  function pauseAfterTouch() {
+    if (resumeTimer.current !== null) window.clearTimeout(resumeTimer.current)
+    resumeTimer.current = window.setTimeout(() => setPaused(false), 3200)
+  }
+
+  return <div
+    className="stats-carousel"
+    onMouseEnter={() => setPaused(true)}
+    onMouseLeave={() => setPaused(false)}
+    onFocus={() => setPaused(true)}
+    onBlur={(event) => {
+      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setPaused(false)
+    }}
+  >
+    <div
+      ref={trackRef}
+      className="stats-carousel-track"
+      onScroll={handleTrackScroll}
+      onTouchStart={(event) => {
+        touchStart.current = event.touches[0]?.clientX ?? null
+        setPaused(true)
+      }}
+      onTouchEnd={(event) => {
+        if (touchStart.current !== null) {
+          const distance = event.changedTouches[0]?.clientX - touchStart.current
+          if (distance !== undefined && Math.abs(distance) > 35) goTo(index + (distance < 0 ? 1 : -1))
+        }
+        touchStart.current = null
+        pauseAfterTouch()
+      }}
+    >
+      {cards.map((card, cardIndex) => <div className={`stat-carousel-card ${card.tone}`} key={card.label} aria-hidden={cardIndex !== index}>
+        <span>{card.label}</span><strong>{card.value}</strong>{card.note && <small>{card.note}</small>}
+      </div>)}
+    </div>
+    <button type="button" className="carousel-edge-zone left" aria-label="Previous card" onClick={() => goTo(index - 1)}><span className="carousel-arrow"><ArrowLeft size={18} /></span></button>
+    <button type="button" className="carousel-edge-zone right" aria-label="Next card" onClick={() => goTo(index + 1)}><span className="carousel-arrow"><ArrowRight size={18} /></span></button>
+    <div className="carousel-dots">{cards.map((card, dot) => <button type="button" key={card.label} aria-label={`Go to card ${dot + 1}`} className={dot === index ? 'active' : ''} onClick={() => { goTo(dot); setPaused(true); pauseAfterTouch() }} />)}</div>
   </div>
 }

@@ -285,7 +285,7 @@ export default function MembersPage() {
   }
 
   return <>
-    <PageHeader group={group} eyebrow={group.name} title={labels.people[0]?.toUpperCase() + labels.people.slice(1)} description={`${members.length} ${labels.people} in ${group.name}`} action={<button className="button primary" onClick={openAdd}><Plus size={17} />Add {labels.people.slice(0, -1)}</button>} />
+    <PageHeader group={group} eyebrow={group.name} title={labels.people[0]?.toUpperCase() + labels.people.slice(1)} description={`${members.length} ${labels.people} in ${group.name}`} action={<button className="button primary btn-block" onClick={openAdd}><Plus size={17} />Add {labels.people.slice(0, -1)}</button>} />
     {pendingMembers.length > 0 && <div className="content-card full pending-members-card"><div className="card-head"><div><h2>Waiting for approval</h2><p>{pendingMembers.length} requests to join</p></div></div>
       <div className="member-card-list">{pendingMembers.map((member) => <article className="member-card" key={member.id}>
         <div className="member-card-main">        <div className="member-name"><b>{member.name}</b>{member.house && <span className="badge member-tag">{member.house}</span>}<span>{member.phone_normalized ? `+${member.phone_normalized}` : 'No phone yet'}</span>{!member.phone_normalized && <small className="phone-missing-hint">They can&apos;t pay until they join by link or you add a number.</small>}</div></div>
@@ -352,7 +352,7 @@ export default function MembersPage() {
       {(editing && billingStartChoice === 'pick' || !editing && group.due_mode === 'per_member') && <label>{editing ? 'Billing starts' : 'First due date'}<input type="date" required value={form.first_due_date} onChange={(event) => setForm({ ...form, first_due_date: event.target.value })} /></label>}
       <label className="active-switch"><input type="checkbox" checked={!form.active} onChange={(event) => setForm({ ...form, active: !event.target.checked })} />Moved out or stopped paying</label>
       {error && <p className="form-error" role="alert">{error}{errorCode && <small className="form-error-code">Code {errorCode}</small>}</p>}
-      <button className="button primary wide" disabled={saving}>{saving ? 'Saving...' : editing ? form.active ? 'Save changes' : 'Remove person' : 'Add person'}</button>
+      <button className="button primary btn-block" disabled={saving}>{saving ? 'Saving...' : editing ? form.active ? 'Save changes' : 'Remove person' : 'Add person'}</button>
     </form></div>}
   </>
 }

@@ -20,13 +20,13 @@ export default function LandingPage() {
     {menuOpen && <div className="mobile-menu-panel" role="dialog" aria-label="Main menu">
       <button className="mobile-menu-close" onClick={closeMenu} aria-label="Close menu"><X size={20} /></button>
       <a href="#how" onClick={closeMenu}>How it works</a><a href="#communities" onClick={closeMenu}>Who it&apos;s for</a><a href="#faq" onClick={closeMenu}>FAQ</a>
-      <Link href="/login" onClick={closeMenu}>Log in</Link><Link href="/start" onClick={closeMenu} className="button primary wide">Start a group</Link>
+      <Link href="/login" onClick={closeMenu}>Log in</Link><Link href="/start" onClick={closeMenu} className="button primary btn-block">Start a group</Link>
     </div>}
     <main>
       <section className="landing-hero">
         <div className="hero-copy"><span className="eyebrow">Money for the people</span><h1>Community money,<br /><span>out in the open.</span></h1>
           <p>Collect dues, see who has paid, and show everyone where the money went. No screenshots. No arguments.</p>
-          <div className="hero-actions"><Link href="/start" className="button primary">Start a group <ArrowRight size={17} /></Link><a href="#how" className="text-button">See how it works <ArrowRight size={15} /></a></div>
+          <div className="hero-actions"><Link href="/start" className="button primary btn-block">Start a group <ArrowRight size={17} /></Link><a href="#how" className="text-button">See how it works <ArrowRight size={15} /></a></div>
           <div className="trust"><div className="trust-avatars"><span>PL</span><span>NK</span><span>OK</span></div><span>Made for groups that<br />look out for each other.</span></div>
         </div>
         <div className="hero-visual">
@@ -53,11 +53,11 @@ export default function LandingPage() {
       <section id="communities" className="landing-section communities"><div className="section-intro"><span className="eyebrow">Made for your community</span><h2>One simple place<br />for group money.</h2></div>
         <div className="community-grid"><div><span className="feature-number">01</span><h3>Estates</h3><p>Keep dues and shared costs clear.</p></div><div><span className="feature-number">02</span><h3>Churches</h3><p>Track group contributions together.</p></div><div><span className="feature-number">03</span><h3>Unions</h3><p>Make group records easy to check.</p></div></div>
       </section>
-      <section className="ledger-showcase"><div><span className="eyebrow">Open and clear</span><h2>Keep a clear record<br />of every naira.</h2><p>Choose who can see your group ledger. It shows money in, money out, and the balance.</p><Link href="/start" className="button primary">Start a group <ArrowRight size={17} /></Link></div>
+      <section className="ledger-showcase"><div><span className="eyebrow">Open and clear</span><h2>Keep a clear record<br />of every naira.</h2><p>Choose who can see your group ledger. It shows money in, money out, and the balance.</p><Link href="/start" className="button primary btn-block">Start a group <ArrowRight size={17} /></Link></div>
         <div className="ledger-paper"><p><span>Money in</span><strong>Group records</strong></p><p><span>Money out</span><strong>Shared costs</strong></p><p><span>Balance</span><strong>Always clear</strong></p></div>
       </section>
       <section id="faq" className="landing-section faq-section"><div className="section-intro"><span className="eyebrow">Questions</span><h2>Good to know.</h2></div><div className="faq-list"><details><summary>Who can start a group?</summary><p>Any treasurer who wants to keep group money clear.</p></details><details><summary>Can members see the group record?</summary><p>Yes. Share the public group link with everyone.</p></details><details><summary>Can I add members later?</summary><p>Yes. Add and manage members from your overview.</p></details></div></section>
-      <section className="landing-cta"><span className="eyebrow">Ready to begin?</span><h2>Make group money clear.</h2><Link href="/start" className="button primary">Start a group <ArrowRight size={17} /></Link></section>
+      <section className="landing-cta"><span className="eyebrow">Ready to begin?</span><h2>Make group money clear.</h2><Link href="/start" className="button primary btn-block">Start a group <ArrowRight size={17} /></Link></section>
     </main>
     <footer className="landing-footer"><Logo href="/" /><span>Simple group money for people who care.</span><Link href="/login">Log in</Link></footer>
   </div>

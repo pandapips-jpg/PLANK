@@ -40,7 +40,7 @@ export default async function GroupsPage() {
   }))
 
   return <div className="groups-page">
-    <div className="page-header groups-page-header"><div><p className="eyebrow">Your Plank</p><h1>Your groups</h1><p className="description">Choose a group to continue.</p></div><Link className="button primary groups-new-button" href="/app/new"><Plus size={17} />New group</Link></div>
+    <div className="page-header groups-page-header"><div><p className="eyebrow">Your Plank</p><h1>Your groups</h1><p className="description">Choose a group to continue.</p></div><Link className="button primary btn-block groups-new-button" href="/app/new"><Plus size={17} />New group</Link></div>
     <div className="groups-grid">
       {summaries.map(({ group, members, overdue }) => <Link className="group-card" href={`/app/groups/${group.id}`} key={group.id}>
         <div className="group-card-head"><GroupMark group={group} /><div className="group-card-title"><h2 title={group.name}>{group.name}</h2><span className="group-type-pill">{group.type}</span></div></div>

@@ -211,9 +211,9 @@ export default function SettingsPage() {
         {!loading && !error && <p className="description">{chargeCount} existing bills. Changes apply to new bills only.</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
         {saved && <p className="success"><Check size={17} />Group settings saved.</p>}
-        <button className="button primary wide" disabled={saving}>{saving ? 'Saving...' : 'Save settings'}</button>
+        <button className="button primary btn-block" disabled={saving}>{saving ? 'Saving...' : 'Save settings'}</button>
       </div>
-      <section className="content-card delete-group-section"><h2>Delete group</h2><p className="description">This cannot be undone. Your group and its data will be removed.</p><label>Type {group.name} to confirm<input value={confirmName} onChange={(event) => setConfirmName(event.target.value)} /></label><button type="button" className="button secondary wide" disabled={saving || confirmName !== group.name} onClick={deleteGroup}>{saving ? 'Deleting...' : 'Delete group'}</button></section>
+      <section className="content-card delete-group-section"><h2>Delete group</h2><p className="description">This cannot be undone. Your group and its data will be removed.</p><label>Type {group.name} to confirm<input value={confirmName} onChange={(event) => setConfirmName(event.target.value)} /></label><button type="button" className="button secondary btn-block" disabled={saving || confirmName !== group.name} onClick={deleteGroup}>{saving ? 'Deleting...' : 'Delete group'}</button></section>
     </form>
   </>
 }

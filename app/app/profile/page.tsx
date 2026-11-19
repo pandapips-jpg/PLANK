@@ -76,8 +76,8 @@ export default function ProfilePage() {
         <label>Full name<input required value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
         <label>Phone number<input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}{message && <p className="success">{message}</p>}
-        <button className="button primary wide" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button>
-        <button type="button" className="button secondary wide" onClick={logOut}><LogOut size={17} />Log out</button>
+        <button className="button primary btn-block" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</button>
+        <button type="button" className="button secondary btn-block" onClick={logOut}><LogOut size={17} />Log out</button>
       </form>
       <div className="content-card"><div className="card-head"><div><span className="eyebrow">Your groups</span><h2>Groups you manage</h2></div><Link href="/app/new" className="text-button">Create a new group <ArrowRight size={15} /></Link></div>
         {loading ? <div className="list-skeleton" aria-label="Loading your groups"><span /><span /><span /></div> : groups.length === 0 ? <div className="empty">You have no groups yet.</div> : groups.map((group) => {

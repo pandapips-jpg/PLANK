@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
+    "layout-check": "tsx scripts/layout-check.ts",
     "paga:app-check": "tsx --conditions=react-server --env-file=.env.local scripts/paga-app-check.ts",
     "seed:demo": "tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.ts"
   },
@@ -32,6 +33,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "playwright": "^1.65.1",
     "postcss": "^8.5",
     "server-only": "^0.0.1",
     "shadcn": "^4.11.0",

@@ -68,7 +68,7 @@ export default function PayoutPage() {
         <label>Who is being paid?<input required value={payee} onChange={(event) => setPayee(event.target.value)} placeholder="Enter a payee" /></label>
         <label>What is it for?<input required value={note} onChange={(event) => setNote(event.target.value)} placeholder="Enter a short note" /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="button primary wide" disabled={saving}>{saving ? 'Saving...' : 'Save payment'}</button>
+        <button className="button primary btn-block" disabled={saving}>{saving ? 'Saving...' : 'Save payment'}</button>
         {saved && <div className="success"><Check size={17} />Payment recorded and added to the ledger.</div>}
       </form>
       <div className="content-card"><div className="card-head"><div><h2>Past payments</h2><p>Recent money out</p></div></div>

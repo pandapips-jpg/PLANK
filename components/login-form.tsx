@@ -57,7 +57,7 @@ export function LoginForm() {
       <label>Email address<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
       <label>Password<div className="password-field"><input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((current) => !current)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></label>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <button className="button primary wide" disabled={loading}>{loading ? 'Logging in...' : <>Log in <ArrowRight size={17} /></>}</button>
+      <button className="button primary btn-block" disabled={loading}>{loading ? 'Logging in...' : <>Log in <ArrowRight size={17} /></>}</button>
     </form>
     <p className="auth-foot">New to Plank? <Link href="/start">Create a group</Link></p>
   </div></div>

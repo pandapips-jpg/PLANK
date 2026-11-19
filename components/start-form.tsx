@@ -302,7 +302,7 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
           <label>Password<div className="password-field"><input type={showPassword ? 'text' : 'password'} required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((current) => !current)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></label>
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="button primary wide continue" disabled={loading}>{loading ? 'Creating account...' : <>Continue <ArrowRight size={17} /></>}</button>
+        <button className="button primary btn-block continue" disabled={loading}>{loading ? 'Creating account...' : <>Continue <ArrowRight size={17} /></>}</button>
       </form>}
       {step === 2 && <form onSubmit={createGroup}>
         <p className="eyebrow">Your group</p><h1>What are you collecting for?</h1><p className="description">A simple setup now makes everything easier later.</p>
@@ -329,7 +329,7 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
           </details>
         </div>
         {error && <p className="form-error" role="alert">{error}{errorCode && <small className="form-error-code">Code {errorCode}</small>}</p>}
-        <button className="button primary wide continue" disabled={loading}>{loading ? 'Saving group...' : <>Continue <ArrowRight size={17} /></>}</button>
+        <button className="button primary btn-block continue" disabled={loading}>{loading ? 'Saving group...' : <>Continue <ArrowRight size={17} /></>}</button>
       </form>}
       {step === 3 && group && <>
         <div className="done-mark"><Check size={28} /></div><p className="eyebrow">You&apos;re all set</p><h1>{group.name} is ready.</h1><p className="description">Share the join link with your members.</p>
@@ -338,7 +338,7 @@ export function StartForm({ initialStep, hasGroups, isAuthenticated }: { initial
         <div className="content-card next-payment-links"><h2>Share with your members</h2><JoinLinkActions groupName={group.name} joinToken={group.join_token} />
           <Link className="optional-link" href={`/app/groups/${group.id}/members`}>Add members yourself</Link>
         </div>
-        <button className="button primary wide" onClick={() => { router.replace(`/app/groups/${group.id}`); router.refresh() }}>Go to my overview <ArrowRight size={17} /></button>
+        <button className="button primary btn-block" onClick={() => { router.replace(`/app/groups/${group.id}`); router.refresh() }}>Go to my overview <ArrowRight size={17} /></button>
       </>}
     </div>
     {showLeaveConfirmation && <div className="leave-group-backdrop" onClick={() => setShowLeaveConfirmation(false)}>

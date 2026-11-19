@@ -58,7 +58,7 @@ export function AppShell({ info, children }: { info: AppInfo; children: React.Re
   }
 
   const avatar = initials(info.name) || 'P'
-  const switcher = <button type="button" className="group-switch" onClick={() => setSwitcherOpen(true)} aria-expanded={switcherOpen}>
+  const switcher = <button type="button" className="group-switch" onClick={() => setSwitcherOpen(true)} aria-label={`Switch group, currently ${info.group.name}`} aria-expanded={switcherOpen}>
     <GroupMark group={info.group} /><span><b>{info.group.name}</b><small>{info.group.type}</small></span><ChevronDown size={15} />
   </button>
 
@@ -80,7 +80,7 @@ export function AppShell({ info, children }: { info: AppInfo; children: React.Re
         <header className="mobile-header"><Logo /><div className="mobile-header-actions"><NotificationsBell groupId={info.group.id} /><div className="mobile-group-switch">{switcher}<Link href="/app/profile" className="mobile-menu" aria-label="Open profile">{avatar}</Link></div></div></header>
         {children}
       </main>
-      <div className="mobile-tabs">{items.map(({ section: itemSection, label, icon: Icon }) => <Link key={itemSection} href={`${prefix}${itemSection}`} className={current === itemSection ? 'active' : ''}><Icon size={19} /><span>{label}</span></Link>)}</div>
+      <div className="mobile-tabs">{items.map(({ section: itemSection, label, icon: Icon }) => <Link key={itemSection} href={`${prefix}${itemSection}`} className={current === itemSection ? 'active' : ''} aria-label={label}><Icon size={19} aria-hidden="true" /><span>{label}</span></Link>)}</div>
     </div>
     {switcherOpen && <div className="group-switch-backdrop" onClick={() => setSwitcherOpen(false)}>
       <div className="group-switch-menu" role="dialog" aria-modal="true" aria-label="Switch group" onClick={(event) => event.stopPropagation()}>

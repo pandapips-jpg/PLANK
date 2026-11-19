@@ -6,7 +6,7 @@ import { joinGroupAction, type JoinActionState } from '@/app/actions/join'
 
 function JoinButton() {
   const { pending } = useFormStatus()
-  return <button className="button primary wide" disabled={pending}>{pending ? 'Joining...' : 'Join group'}</button>
+  return <button className="button primary btn-block" disabled={pending}>{pending ? 'Joining...' : 'Join group'}</button>
 }
 
 export function JoinForm({ token }: { token: string }) {
